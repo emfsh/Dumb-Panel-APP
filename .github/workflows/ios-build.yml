@@ -124,6 +124,12 @@ jobs:
         if: env.BUILD_MODE == 'unsigned'
         run: |
           flutter build ios --release --no-codesign
+          mkdir -p build/ios/ipa/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/ipa/Payload/Runner.app
+          (
+            cd build/ios/ipa
+            ditto -c -k --sequesterRsrc --keepParent Payload Runner-unsigned.ipa
+          )
           ditto -c -k --sequesterRsrc --keepParent \
             build/ios/iphoneos/Runner.app \
             build/ios/iphoneos/Runner.app.zip
@@ -139,6 +145,7 @@ jobs:
         with:
           name: ios-unsigned-runner-app
           path: |
+            build/ios/ipa/Runner-unsigned.ipa
             build/ios/iphoneos/Runner.app.zip
             build/ios/iphoneos/Runner.app.dSYM
           if-no-files-found: error
