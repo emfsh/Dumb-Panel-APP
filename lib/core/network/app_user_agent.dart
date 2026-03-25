@@ -14,6 +14,7 @@ class AppUserAgent {
   static Map<String, String> get defaultHeaders => {
     'User-Agent': _userAgent,
     'X-Client-App': 'daidai-panel-app',
+    'X-Client-Type': 'app',
     'X-Client-Platform': _platform,
     'X-Client-Version': versionLabel,
   };

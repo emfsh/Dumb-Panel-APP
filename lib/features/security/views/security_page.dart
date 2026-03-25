@@ -508,6 +508,16 @@ class _SessionsTabState extends ConsumerState<_SessionsTab>
                                           : AppColors.slate400,
                                     ),
                                   ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '客户端: ${s['client_type_label'] ?? '未知'}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: widget.isLight
+                                          ? AppColors.slate500
+                                          : AppColors.slate400,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),

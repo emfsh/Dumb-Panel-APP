@@ -171,12 +171,7 @@ class MorePage extends ConsumerWidget {
             icon: Icons.info_outline,
             title: '关于',
             isLight: isLight,
-            onTap: () => showAboutDialog(
-              context: context,
-              applicationName: '呆呆面板',
-              applicationVersion: '1.0.1',
-              applicationLegalese: '轻量级定时任务管理平台',
-            ),
+            onTap: () => _showAboutDialog(context),
           ),
 
           // Logout
@@ -255,6 +250,74 @@ class MorePage extends ConsumerWidget {
         context.go('/server-config?manual=1');
       }
     }
+  }
+
+  Future<void> _showAboutDialog(BuildContext context) async {
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('关于'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withAlpha(20),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.dashboard_customize_outlined,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '呆呆面板',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text('版本 1.0.1', style: TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              '轻量级定时任务管理平台',
+              style: TextStyle(
+                fontSize: 13,
+                color: isLight ? AppColors.slate600 : AppColors.slate300,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            height: 44,
+            child: FilledButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('知道了'),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
