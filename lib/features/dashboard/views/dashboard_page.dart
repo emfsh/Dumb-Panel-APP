@@ -1,0 +1,502 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../core/auth/auth_provider.dart';
+import '../../../core/theme/app_theme.dart';
+import '../providers/dashboard_provider.dart';
+
+class DashboardPage extends ConsumerStatefulWidget {
+  const DashboardPage({super.key});
+
+  @override
+  ConsumerState<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends ConsumerState<DashboardPage> {
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() async {
+      await ref.read(dashboardProvider.notifier).load();
+      if (ref.read(authProvider).user == null) {
+        await ref.read(authProvider.notifier).refreshUser();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final data = ref.watch(dashboardProvider);
+    final auth = ref.watch(authProvider);
+    final user = auth.user;
+    final theme = Theme.of(context);
+    final isLight = theme.brightness == Brightness.light;
+    final quickActions = (user?.isAdmin ?? false)
+        ? <_DashboardQuickActionData>[
+            _DashboardQuickActionData(
+              icon: Icons.add_task_outlined,
+              label: '新建任务',
+              onTap: () => context.push('/tasks/new'),
+            ),
+            _DashboardQuickActionData(
+              icon: Icons.code_outlined,
+              label: '脚本管理',
+              onTap: () => context.push('/scripts'),
+            ),
+            _DashboardQuickActionData(
+              icon: Icons.sync_outlined,
+              label: '订阅管理',
+              onTap: () => context.push('/subscriptions'),
+            ),
+            _DashboardQuickActionData(
+              icon: Icons.inventory_2_outlined,
+              label: '依赖管理',
+              onTap: () => context.push('/deps'),
+            ),
+          ]
+        : <_DashboardQuickActionData>[
+            _DashboardQuickActionData(
+              icon: Icons.schedule_outlined,
+              label: '任务',
+              onTap: () => context.go('/tasks'),
+            ),
+            _DashboardQuickActionData(
+              icon: Icons.key_outlined,
+              label: '环境变量',
+              onTap: () => context.go('/envs'),
+            ),
+            _DashboardQuickActionData(
+              icon: Icons.volunteer_activism_outlined,
+              label: '赞助名单',
+              onTap: () => context.push('/sponsors'),
+            ),
+            _DashboardQuickActionData(
+              icon: Icons.settings_outlined,
+              label: '设置',
+              onTap: () => context.go('/more'),
+            ),
+          ];
+
+    return Scaffold(
+      body: RefreshIndicator(
+        color: AppColors.primary,
+        onRefresh: () => ref.read(dashboardProvider.notifier).load(),
+        child: data.loading && data.system.isEmpty
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              )
+            : ListView(
+                padding: EdgeInsets.only(
+                  top: MediaQuery.of(context).padding.top + 16,
+                  left: 20,
+                  right: 20,
+                  bottom: 100,
+                ),
+                children: [
+                  // Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '欢迎，',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            auth.user?.username ?? '管理员',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: isLight ? Colors.white : AppColors.slate900,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isLight
+                                ? AppColors.slate200
+                                : AppColors.slate800,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.notifications_none,
+                          size: 20,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Server Info Card
+                  _ServerInfoCard(data: data, isLight: isLight),
+                  const SizedBox(height: 24),
+
+                  // System Stats
+                  Text(
+                    '系统状态',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurfaceVariant,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // CPU + RAM
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.memory,
+                          iconBg: AppColors.blue100,
+                          iconBgDark: AppColors.blue500.withAlpha(25),
+                          iconColor: AppColors.blue600,
+                          iconColorDark: AppColors.blue500,
+                          label: 'CPU 使用率',
+                          value: data.cpuUsage,
+                          barColor: AppColors.blue500,
+                          valueText: '${data.cpuUsage.toStringAsFixed(0)}%',
+                          isLight: isLight,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _StatCard(
+                          icon: Icons.storage,
+                          iconBg: AppColors.primaryLight,
+                          iconBgDark: AppColors.primary.withAlpha(25),
+                          iconColor: AppColors.primary,
+                          iconColorDark: AppColors.primary,
+                          label: '内存 (${data.memoryUsed}/${data.memoryTotal})',
+                          value: data.memoryUsage,
+                          barColor: AppColors.primary,
+                          valueText: '${data.memoryUsage.toStringAsFixed(0)}%',
+                          isLight: isLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Disk (full width)
+                  _StatCard(
+                    icon: Icons.disc_full_outlined,
+                    iconBg: AppColors.purple100,
+                    iconBgDark: AppColors.purple500.withAlpha(25),
+                    iconColor: AppColors.purple600,
+                    iconColorDark: AppColors.purple500,
+                    label: '磁盘空间',
+                    value: data.diskUsage,
+                    barColor: AppColors.purple500,
+                    valueText: '${data.diskUsage.toStringAsFixed(0)}%',
+                    subtitle: '${data.diskUsed} / ${data.diskTotal}',
+                    isLight: isLight,
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Quick Actions
+                  Text(
+                    '快捷操作',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurfaceVariant,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: List.generate(quickActions.length * 2 - 1, (
+                      index,
+                    ) {
+                      if (index.isOdd) {
+                        return const SizedBox(width: 10);
+                      }
+                      final action = quickActions[index ~/ 2];
+                      return _QuickAction(
+                        icon: action.icon,
+                        label: action.label,
+                        isLight: isLight,
+                        onTap: action.onTap,
+                      );
+                    }),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _DashboardQuickActionData {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _DashboardQuickActionData({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+}
+
+class _ServerInfoCard extends StatelessWidget {
+  final DashboardData data;
+  final bool isLight;
+
+  const _ServerInfoCard({required this.data, required this.isLight});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isLight
+              ? [Colors.white, AppColors.slate50]
+              : [AppColors.slate900, AppColors.slate800],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isLight ? AppColors.slate200 : AppColors.slate800,
+        ),
+      ),
+      child: Stack(
+        children: [
+          // 装饰圆
+          Positioned(
+            top: -30,
+            right: -30,
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withAlpha(isLight ? 20 : 10),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withAlpha(180),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    data.hostname,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: isLight ? AppColors.slate600 : AppColors.slate400,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                '${data.os} ${data.system['arch'] ?? ''}',
+                style: const TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '已运行：${data.uptime}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isLight ? AppColors.slate500 : AppColors.slate400,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final IconData icon;
+  final Color iconBg;
+  final Color iconBgDark;
+  final Color iconColor;
+  final Color iconColorDark;
+  final String label;
+  final double value;
+  final Color barColor;
+  final String valueText;
+  final String? subtitle;
+  final bool isLight;
+
+  const _StatCard({
+    required this.icon,
+    required this.iconBg,
+    required this.iconBgDark,
+    required this.iconColor,
+    required this.iconColorDark,
+    required this.label,
+    required this.value,
+    required this.barColor,
+    required this.valueText,
+    this.subtitle,
+    required this.isLight,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isLight ? Colors.white : AppColors.slate900,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isLight ? AppColors.slate200 : AppColors.slate800,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: isLight ? iconBg : iconBgDark,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  icon,
+                  size: 16,
+                  color: isLight ? iconColor : iconColorDark,
+                ),
+              ),
+              Text(
+                valueText,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: isLight ? iconColor : iconColorDark,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (subtitle != null)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isLight ? AppColors.slate500 : AppColors.slate400,
+                  ),
+                ),
+                Text(subtitle!, style: const TextStyle(fontSize: 12)),
+              ],
+            )
+          else
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: isLight ? AppColors.slate500 : AppColors.slate400,
+              ),
+            ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: (value / 100).clamp(0.0, 1.0),
+              minHeight: 6,
+              backgroundColor: isLight
+                  ? AppColors.slate100
+                  : AppColors.slate800,
+              valueColor: AlwaysStoppedAnimation(barColor),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isLight;
+  final VoidCallback onTap;
+
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.isLight,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: isLight ? Colors.white : AppColors.slate900,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isLight ? AppColors.slate200 : AppColors.slate800,
+            ),
+          ),
+          child: Column(
+            children: [
+              Icon(
+                icon,
+                size: 22,
+                color: isLight ? AppColors.slate700 : AppColors.slate300,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: const TextStyle(fontSize: 10),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

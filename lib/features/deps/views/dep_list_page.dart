@@ -1,0 +1,1299 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import '../../../core/network/dio_client.dart';
+import '../../../core/network/api_endpoints.dart';
+import '../../../core/network/sse_client.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../shared/models/dependency.dart';
+import '../../../shared/utils/api_utils.dart';
+
+// ── Provider ──
+
+final depListProvider = StateNotifierProvider<DepListNotifier, DepListState>((
+  ref,
+) {
+  return DepListNotifier();
+});
+
+class DepListState {
+  final List<Dependency> items;
+  final bool loading;
+  final String selectedType;
+
+  const DepListState({
+    this.items = const [],
+    this.loading = false,
+    this.selectedType = 'nodejs',
+  });
+
+  DepListState copyWith({
+    List<Dependency>? items,
+    bool? loading,
+    String? selectedType,
+  }) {
+    return DepListState(
+      items: items ?? this.items,
+      loading: loading ?? this.loading,
+      selectedType: selectedType ?? this.selectedType,
+    );
+  }
+}
+
+class DepMirrorConfig {
+  final String pipMirror;
+  final String npmMirror;
+  final String linuxMirror;
+  final String linuxPackageManager;
+  final String linuxDistribution;
+  final bool linuxMirrorSupported;
+  final String linuxMirrorLabel;
+  final String linuxMirrorMessage;
+
+  const DepMirrorConfig({
+    this.pipMirror = '',
+    this.npmMirror = '',
+    this.linuxMirror = '',
+    this.linuxPackageManager = '',
+    this.linuxDistribution = '',
+    this.linuxMirrorSupported = false,
+    this.linuxMirrorLabel = 'Linux',
+    this.linuxMirrorMessage = '',
+  });
+
+  factory DepMirrorConfig.fromJson(Map<String, dynamic> json) {
+    return DepMirrorConfig(
+      pipMirror: json['pip_mirror']?.toString() ?? '',
+      npmMirror: json['npm_mirror']?.toString() ?? '',
+      linuxMirror: json['linux_mirror']?.toString() ?? '',
+      linuxPackageManager: json['linux_package_manager']?.toString() ?? '',
+      linuxDistribution: json['linux_distribution']?.toString() ?? '',
+      linuxMirrorSupported: json['linux_mirror_supported'] == true,
+      linuxMirrorLabel: json['linux_mirror_label']?.toString() ?? 'Linux',
+      linuxMirrorMessage: json['linux_mirror_message']?.toString() ?? '',
+    );
+  }
+
+  DepMirrorConfig copyWith({
+    String? pipMirror,
+    String? npmMirror,
+    String? linuxMirror,
+    String? linuxPackageManager,
+    bool? linuxMirrorSupported,
+    String? linuxDistribution,
+    String? linuxMirrorLabel,
+    String? linuxMirrorMessage,
+  }) {
+    return DepMirrorConfig(
+      pipMirror: pipMirror ?? this.pipMirror,
+      npmMirror: npmMirror ?? this.npmMirror,
+      linuxMirror: linuxMirror ?? this.linuxMirror,
+      linuxPackageManager: linuxPackageManager ?? this.linuxPackageManager,
+      linuxMirrorSupported: linuxMirrorSupported ?? this.linuxMirrorSupported,
+      linuxDistribution: linuxDistribution ?? this.linuxDistribution,
+      linuxMirrorLabel: linuxMirrorLabel ?? this.linuxMirrorLabel,
+      linuxMirrorMessage: linuxMirrorMessage ?? this.linuxMirrorMessage,
+    );
+  }
+
+  Map<String, dynamic> toRequestJson() => {
+    'pip_mirror': pipMirror.trim(),
+    'npm_mirror': npmMirror.trim(),
+    'linux_mirror': linuxMirror.trim(),
+  };
+}
+
+class DepListNotifier extends StateNotifier<DepListState> {
+  DepListNotifier() : super(const DepListState());
+
+  Future<List<Dependency>> fetchByType(String type) async {
+    final resp = await DioClient.instance.dio.get(
+      ApiEndpoints.deps,
+      queryParameters: {'page': 1, 'page_size': 200, 'type': type},
+    );
+    final paginated = extractPaginated(resp.data);
+    return paginated.items.map(Dependency.fromJson).toList();
+  }
+
+  Future<void> load({String? type}) async {
+    final nextType = type ?? state.selectedType;
+    state = state.copyWith(selectedType: nextType, loading: true);
+    try {
+      final items = await fetchByType(nextType);
+      state = state.copyWith(items: items, loading: false);
+    } catch (_) {
+      state = state.copyWith(loading: false);
+    }
+  }
+
+  Future<void> setType(String type) async {
+    await load(type: type);
+  }
+
+  Future<void> delete(int id, {bool force = false}) async {
+    await DioClient.instance.dio.delete(
+      ApiEndpoints.depById(id),
+      queryParameters: force ? {'force': true} : null,
+    );
+    await load();
+  }
+
+  Future<void> batchDelete(List<int> ids) async {
+    await DioClient.instance.dio.post(
+      ApiEndpoints.depsBatchDelete,
+      data: {'ids': ids},
+    );
+    await load();
+  }
+
+  Future<void> reinstall(int id) async {
+    await DioClient.instance.dio.put(ApiEndpoints.depReinstall(id));
+    await load();
+  }
+
+  Future<void> cancel(int id) async {
+    await DioClient.instance.dio.put(ApiEndpoints.depCancel(id));
+    await load();
+  }
+
+  Future<void> create({
+    required String type,
+    required List<String> names,
+  }) async {
+    await DioClient.instance.dio.post(
+      ApiEndpoints.deps,
+      data: {'type': type, 'names': names},
+    );
+    await load();
+  }
+
+  Future<Map<String, dynamic>> getStatus(int id) async {
+    final resp = await DioClient.instance.dio.get(ApiEndpoints.depStatus(id));
+    final data = extractData(resp.data);
+    if (data is Map<String, dynamic>) {
+      return data;
+    }
+    if (data is Map) {
+      return Map<String, dynamic>.from(data);
+    }
+    return <String, dynamic>{};
+  }
+
+  Future<DepMirrorConfig> getMirrors() async {
+    final resp = await DioClient.instance.dio.get(ApiEndpoints.depsMirrors);
+    final data = extractData(resp.data);
+    if (data is Map<String, dynamic>) {
+      return DepMirrorConfig.fromJson(data);
+    }
+    if (data is Map) {
+      return DepMirrorConfig.fromJson(Map<String, dynamic>.from(data));
+    }
+    return const DepMirrorConfig();
+  }
+
+  Future<void> setMirrors(DepMirrorConfig config) async {
+    await DioClient.instance.dio.put(
+      ApiEndpoints.depsMirrors,
+      data: config.toRequestJson(),
+    );
+  }
+}
+
+// ── Page ──
+
+class _CreateDepRequest {
+  final String type;
+  final List<String> names;
+
+  const _CreateDepRequest({required this.type, required this.names});
+}
+
+class DepListPage extends ConsumerStatefulWidget {
+  const DepListPage({super.key});
+
+  @override
+  ConsumerState<DepListPage> createState() => _DepListPageState();
+}
+
+class _DepListPageState extends ConsumerState<DepListPage> {
+  final DateFormat _dateFormat = DateFormat('yyyy/MM/dd HH:mm');
+  final Set<int> _selectedIds = <int>{};
+  Map<String, int> _counts = const {'nodejs': 0, 'python': 0, 'linux': 0};
+  bool _countLoading = true;
+  bool _mirrorLoading = false;
+  bool _mirrorSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(_loadPageData);
+  }
+
+  Future<void> _loadPageData() async {
+    await Future.wait([
+      ref.read(depListProvider.notifier).load(),
+      _loadCounts(),
+    ]);
+    _trimSelection();
+  }
+
+  Future<void> _loadCounts() async {
+    final notifier = ref.read(depListProvider.notifier);
+    try {
+      final results = await Future.wait([
+        notifier.fetchByType('nodejs'),
+        notifier.fetchByType('python'),
+        notifier.fetchByType('linux'),
+      ]);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _counts = {
+          'nodejs': results[0].length,
+          'python': results[1].length,
+          'linux': results[2].length,
+        };
+        _countLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _countLoading = false);
+    }
+  }
+
+  void _trimSelection() {
+    final validIds = ref
+        .read(depListProvider)
+        .items
+        .map((dep) => dep.id)
+        .toSet();
+    _selectedIds.removeWhere((id) => !validIds.contains(id));
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _extractError(Object error, String fallback) {
+    if (error is DioException) {
+      final raw = error.response?.data;
+      if (raw is Map) {
+        final data = Map<String, dynamic>.from(raw);
+        final message = data['error'] ?? data['message'];
+        if (message != null && message.toString().trim().isNotEmpty) {
+          return message.toString().trim();
+        }
+      }
+      if ((error.message ?? '').trim().isNotEmpty) {
+        return error.message!.trim();
+      }
+    }
+    final text = error.toString().trim();
+    return text.isEmpty ? fallback : text;
+  }
+
+  String _typeLabel(String type) {
+    switch (type) {
+      case 'python':
+        return 'Python';
+      case 'linux':
+        return 'Linux';
+      default:
+        return 'NodeJS';
+    }
+  }
+
+  List<String> _parseNames(String raw, bool autoSplit) {
+    if (!autoSplit) {
+      final trimmed = raw.trim();
+      return trimmed.isEmpty ? const [] : [trimmed];
+    }
+    final parts = raw
+        .split(RegExp(r'[\n,\s]+'))
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+    return parts.toSet().toList();
+  }
+
+  Future<void> _changeType(String type) async {
+    await ref.read(depListProvider.notifier).setType(type);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _selectedIds.clear());
+    await _loadCounts();
+  }
+
+  Future<void> _handleCreate() async {
+    final request = await _showCreateDialog();
+    if (request == null) {
+      return;
+    }
+    try {
+      await ref
+          .read(depListProvider.notifier)
+          .create(type: request.type, names: request.names);
+      await _loadCounts();
+      _showMessage('已提交 ${request.names.length} 个依赖安装');
+    } catch (error) {
+      _showMessage(_extractError(error, '提交安装失败'));
+    }
+  }
+
+  Future<_CreateDepRequest?> _showCreateDialog() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final namesController = TextEditingController();
+    var createType = ref.read(depListProvider).selectedType;
+    var autoSplit = true;
+
+    return showDialog<_CreateDepRequest>(
+      context: context,
+      useRootNavigator: true,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('安装依赖'),
+          content: SizedBox(
+            width: 460,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(value: 'nodejs', label: Text('NodeJS')),
+                      ButtonSegment(value: 'python', label: Text('Python')),
+                      ButtonSegment(value: 'linux', label: Text('Linux')),
+                    ],
+                    selected: {createType},
+                    onSelectionChanged: (selection) {
+                      setDialogState(() => createType = selection.first);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: namesController,
+                    minLines: 4,
+                    maxLines: 6,
+                    decoration: const InputDecoration(
+                      labelText: '依赖名称',
+                      hintText: '每行一个依赖名称，支持换行、空格、逗号自动拆分',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('自动拆分'),
+                    subtitle: const Text('开启后按换行、空格、逗号拆分为多个依赖'),
+                    value: autoSplit,
+                    onChanged: (value) {
+                      setDialogState(() => autoSplit = value);
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogCtx).pop(),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final names = _parseNames(namesController.text, autoSplit);
+                if (names.isEmpty) {
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('请输入依赖名称')),
+                  );
+                  return;
+                }
+                Navigator.of(
+                  dialogCtx,
+                ).pop(_CreateDepRequest(type: createType, names: names));
+              },
+              child: const Text('安装'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleBatchDelete() async {
+    if (_selectedIds.isEmpty) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('批量卸载'),
+        content: Text('确定要批量卸载选中的 ${_selectedIds.length} 个依赖吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red500),
+            child: const Text('批量卸载'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      await ref
+          .read(depListProvider.notifier)
+          .batchDelete(_selectedIds.toList());
+      await _loadCounts();
+      if (!mounted) {
+        return;
+      }
+      setState(() => _selectedIds.clear());
+      _showMessage('批量卸载已提交');
+    } catch (error) {
+      _showMessage(_extractError(error, '批量卸载失败'));
+    }
+  }
+
+  Future<void> _confirmDelete(Dependency dep, {bool force = false}) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: Text(force ? '强制卸载依赖' : '卸载依赖'),
+        content: Text(
+          force
+              ? '确定要强制卸载「${dep.name}」吗？这会跳过依赖检查直接删除。'
+              : '确定要卸载「${dep.name}」吗？',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red500),
+            child: Text(force ? '强制卸载' : '卸载'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      await ref.read(depListProvider.notifier).delete(dep.id, force: force);
+      await _loadCounts();
+      _showMessage(force ? '强制卸载中' : '卸载中');
+    } catch (error) {
+      _showMessage(_extractError(error, force ? '强制卸载失败' : '卸载失败'));
+    }
+  }
+
+  Future<void> _handleReinstall(Dependency dep) async {
+    try {
+      await ref.read(depListProvider.notifier).reinstall(dep.id);
+      await _loadCounts();
+      _showMessage('重新安装中');
+    } catch (error) {
+      _showMessage(_extractError(error, '重新安装失败'));
+    }
+  }
+
+  Future<void> _handleCancel(Dependency dep) async {
+    try {
+      await ref.read(depListProvider.notifier).cancel(dep.id);
+      await _loadCounts();
+      _showMessage('取消请求已提交');
+    } catch (error) {
+      _showMessage(_extractError(error, '取消失败'));
+    }
+  }
+
+  List<MapEntry<String, String>> _linuxMirrorOptions(DepMirrorConfig config) {
+    if (config.linuxPackageManager == 'apk') {
+      return const [
+        MapEntry('阿里云 (默认)', 'https://mirrors.aliyun.com/alpine'),
+        MapEntry('清华大学', 'https://mirrors.tuna.tsinghua.edu.cn/alpine'),
+        MapEntry('腾讯云', 'https://mirrors.cloud.tencent.com/alpine'),
+        MapEntry('华为云', 'https://repo.huaweicloud.com/alpine'),
+      ];
+    }
+    if (config.linuxPackageManager == 'apt') {
+      if (config.linuxDistribution == 'debian') {
+        return const [
+          MapEntry('阿里云 Debian (默认)', 'https://mirrors.aliyun.com/debian'),
+          MapEntry(
+            '清华大学 Debian',
+            'https://mirrors.tuna.tsinghua.edu.cn/debian',
+          ),
+          MapEntry('腾讯云 Debian', 'https://mirrors.cloud.tencent.com/debian'),
+        ];
+      }
+      return const [
+        MapEntry('阿里云 Ubuntu (默认)', 'https://mirrors.aliyun.com/ubuntu'),
+        MapEntry('清华大学 Ubuntu', 'https://mirrors.tuna.tsinghua.edu.cn/ubuntu'),
+        MapEntry('腾讯云 Ubuntu', 'https://mirrors.cloud.tencent.com/ubuntu'),
+        MapEntry('华为云 Ubuntu', 'https://repo.huaweicloud.com/ubuntu'),
+      ];
+    }
+    return const [];
+  }
+
+  Future<void> _openMirrorDialog() async {
+    setState(() => _mirrorLoading = true);
+    try {
+      final config = await ref.read(depListProvider.notifier).getMirrors();
+      if (!mounted) {
+        return;
+      }
+      final nextConfig = await _showMirrorDialog(config);
+      if (nextConfig == null) {
+        return;
+      }
+      if (!nextConfig.linuxMirrorSupported &&
+          nextConfig.linuxMirror.trim().isNotEmpty) {
+        _showMessage(
+          nextConfig.linuxMirrorMessage.isNotEmpty
+              ? nextConfig.linuxMirrorMessage
+              : '当前系统暂不支持 Linux 镜像设置',
+        );
+        return;
+      }
+      if (mounted) {
+        setState(() => _mirrorSaving = true);
+      }
+      try {
+        await ref.read(depListProvider.notifier).setMirrors(nextConfig);
+        _showMessage('镜像源设置成功');
+      } catch (error) {
+        _showMessage(_extractError(error, '镜像源设置失败'));
+      } finally {
+        if (mounted) {
+          setState(() => _mirrorSaving = false);
+        }
+      }
+    } catch (error) {
+      _showMessage(_extractError(error, '获取镜像源配置失败'));
+    } finally {
+      if (mounted) {
+        setState(() => _mirrorLoading = false);
+      }
+    }
+  }
+
+  Future<DepMirrorConfig?> _showMirrorDialog(DepMirrorConfig initial) async {
+    final pipController = TextEditingController(text: initial.pipMirror);
+    final npmController = TextEditingController(text: initial.npmMirror);
+    final linuxController = TextEditingController(text: initial.linuxMirror);
+
+    return showDialog<DepMirrorConfig>(
+      context: context,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('镜像源设置'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: pipController,
+                    decoration: const InputDecoration(
+                      labelText: 'Python (pip)',
+                      hintText: '留空恢复默认加速源',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children:
+                        const [
+                          MapEntry(
+                            '阿里云 (默认)',
+                            'https://mirrors.aliyun.com/pypi/simple',
+                          ),
+                          MapEntry(
+                            '清华大学',
+                            'https://pypi.tuna.tsinghua.edu.cn/simple',
+                          ),
+                          MapEntry(
+                            '腾讯云',
+                            'https://mirrors.cloud.tencent.com/pypi/simple',
+                          ),
+                        ].map((entry) {
+                          return ActionChip(
+                            label: Text(entry.key),
+                            onPressed: () {
+                              setDialogState(
+                                () => pipController.text = entry.value,
+                              );
+                            },
+                          );
+                        }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: npmController,
+                    decoration: const InputDecoration(
+                      labelText: 'Node.js (npm)',
+                      hintText: '留空恢复默认加速源',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children:
+                        [
+                          ('淘宝 (npmmirror)', 'https://registry.npmmirror.com'),
+                          ('腾讯云', 'https://mirrors.cloud.tencent.com/npm/'),
+                          (
+                            '华为云',
+                            'https://repo.huaweicloud.com/repository/npm/',
+                          ),
+                        ].map((entry) {
+                          return ActionChip(
+                            label: Text(entry.$1),
+                            onPressed: () {
+                              setDialogState(
+                                () => npmController.text = entry.$2,
+                              );
+                            },
+                          );
+                        }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: linuxController,
+                    enabled: initial.linuxMirrorSupported,
+                    decoration: InputDecoration(
+                      labelText: initial.linuxMirrorLabel,
+                      hintText: initial.linuxMirrorSupported
+                          ? '留空恢复默认加速源'
+                          : '当前包管理器暂不支持镜像设置',
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _linuxMirrorOptions(initial).map((entry) {
+                      return ActionChip(
+                        label: Text(entry.key),
+                        onPressed: initial.linuxMirrorSupported
+                            ? () {
+                                setDialogState(
+                                  () => linuxController.text = entry.value,
+                                );
+                              }
+                            : null,
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.blue500.withAlpha(12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.blue500.withAlpha(30),
+                      ),
+                    ),
+                    child: Text(
+                      '当前检测：${initial.linuxPackageManager.isEmpty ? '未识别' : initial.linuxPackageManager}'
+                      '${initial.linuxDistribution.isEmpty ? '' : ' / ${initial.linuxDistribution}'}'
+                      '${initial.linuxMirrorMessage.isEmpty ? '' : '。${initial.linuxMirrorMessage}'}',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(height: 1.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(
+                  dialogCtx,
+                  initial.copyWith(
+                    pipMirror: pipController.text.trim(),
+                    npmMirror: npmController.text.trim(),
+                    linuxMirror: linuxController.text.trim(),
+                  ),
+                );
+              },
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCountCard(
+    String type,
+    String label,
+    bool selected,
+    bool isLight,
+  ) {
+    final count = _counts[type] ?? 0;
+    return GestureDetector(
+      onTap: () => _changeType(type),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primary.withAlpha(isLight ? 18 : 24)
+              : (isLight ? Colors.white : AppColors.slate900),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: selected
+                ? AppColors.primary
+                : (isLight ? AppColors.slate200 : AppColors.slate800),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: selected
+                    ? AppColors.primaryDark
+                    : (isLight ? AppColors.slate500 : AppColors.slate400),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _countLoading ? '--' : '$count',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: selected
+                    ? AppColors.primary
+                    : (isLight ? AppColors.slate900 : AppColors.slate50),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(depListProvider);
+    final theme = Theme.of(context);
+    final isLight = theme.brightness == Brightness.light;
+
+    return Scaffold(
+      body: Padding(
+        padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 12),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => context.pop(),
+                    child: const Icon(Icons.arrow_back_ios, size: 20),
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      '依赖管理',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '镜像源设置',
+                    onPressed: _mirrorLoading || _mirrorSaving
+                        ? null
+                        : _openMirrorDialog,
+                    icon: _mirrorLoading || _mirrorSaving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.settings_suggest_outlined),
+                  ),
+                  GestureDetector(
+                    onTap: _handleCreate,
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withAlpha(80),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.add,
+                        size: 20,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildCountCard(
+                      'nodejs',
+                      'NodeJS',
+                      state.selectedType == 'nodejs',
+                      isLight,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildCountCard(
+                      'python',
+                      'Python',
+                      state.selectedType == 'python',
+                      isLight,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _buildCountCard(
+                      'linux',
+                      'Linux',
+                      state.selectedType == 'linux',
+                      isLight,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _loadPageData,
+                    icon: const Icon(Icons.refresh_rounded, size: 18),
+                    label: Text(state.loading ? '刷新中...' : '刷新'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _openMirrorDialog,
+                    icon: const Icon(Icons.language_rounded, size: 18),
+                    label: const Text('镜像源'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: _selectedIds.isEmpty ? null : _handleBatchDelete,
+                    icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+                    label: Text(
+                      _selectedIds.isEmpty
+                          ? '批量卸载'
+                          : '批量卸载 (${_selectedIds.length})',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: RefreshIndicator(
+                color: AppColors.primary,
+                onRefresh: _loadPageData,
+                child: state.loading && state.items.isEmpty
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                        ),
+                      )
+                    : state.items.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.inventory_2_outlined,
+                              size: 56,
+                              color: AppColors.slate400.withAlpha(120),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              '暂无${_typeLabel(state.selectedType)}依赖',
+                              style: const TextStyle(color: AppColors.slate400),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                        itemCount: state.items.length,
+                        itemBuilder: (_, i) {
+                          final dep = state.items[i];
+                          return _DepCard(
+                            dep: dep,
+                            isLight: isLight,
+                            selected: _selectedIds.contains(dep.id),
+                            subtitle:
+                                '${_typeLabel(dep.type)} · ${_dateFormat.format(dep.createdAt.toLocal())}',
+                            onSelected: (value) {
+                              setState(() {
+                                if (value) {
+                                  _selectedIds.add(dep.id);
+                                } else {
+                                  _selectedIds.remove(dep.id);
+                                }
+                              });
+                            },
+                            onViewLog: () =>
+                                context.push('/deps/${dep.id}/log-stream'),
+                            onCancel: dep.isBusy
+                                ? () => _handleCancel(dep)
+                                : null,
+                            onReinstall: dep.isBusy
+                                ? null
+                                : () => _handleReinstall(dep),
+                            onDelete: dep.isBusy
+                                ? null
+                                : () => _confirmDelete(dep),
+                            onForceDelete: dep.isBusy
+                                ? null
+                                : () => _confirmDelete(dep, force: true),
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Card ──
+
+class _DepCard extends StatelessWidget {
+  final Dependency dep;
+  final bool isLight;
+  final bool selected;
+  final String subtitle;
+  final ValueChanged<bool> onSelected;
+  final VoidCallback onViewLog;
+  final VoidCallback? onCancel;
+  final VoidCallback? onReinstall;
+  final VoidCallback? onDelete;
+  final VoidCallback? onForceDelete;
+
+  const _DepCard({
+    required this.dep,
+    required this.isLight,
+    required this.selected,
+    required this.subtitle,
+    required this.onSelected,
+    required this.onViewLog,
+    required this.onCancel,
+    required this.onReinstall,
+    required this.onDelete,
+    required this.onForceDelete,
+  });
+
+  Color _statusBg() {
+    if (dep.isBusy) {
+      return isLight ? AppColors.blue100 : AppColors.blue500.withAlpha(25);
+    }
+    if (dep.isFailed) {
+      return isLight ? AppColors.red100 : AppColors.red500.withAlpha(25);
+    }
+    if (dep.isCancelled) {
+      return isLight ? AppColors.slate100 : AppColors.slate700;
+    }
+    return isLight ? AppColors.primaryLight : AppColors.primary.withAlpha(25);
+  }
+
+  Color _statusFg() {
+    if (dep.isBusy) {
+      return isLight ? AppColors.blue600 : AppColors.blue500;
+    }
+    if (dep.isFailed) {
+      return isLight ? AppColors.red600 : AppColors.red500;
+    }
+    if (dep.isCancelled) {
+      return isLight ? AppColors.slate600 : AppColors.slate300;
+    }
+    return isLight ? const Color(0xFF047857) : AppColors.primary;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: isLight ? Colors.white : AppColors.slate900,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isLight ? AppColors.slate200 : AppColors.slate800,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Checkbox(
+            value: selected,
+            onChanged: (value) => onSelected(value ?? false),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        dep.name,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (dep.version.isNotEmpty) ...[
+                      const SizedBox(width: 6),
+                      Text(
+                        dep.version,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isLight
+                              ? AppColors.slate500
+                              : AppColors.slate400,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isLight ? AppColors.slate500 : AppColors.slate400,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _statusBg(),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    dep.statusText,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: _statusFg(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: onViewLog,
+                      icon: const Icon(Icons.terminal, size: 16),
+                      label: const Text('日志'),
+                    ),
+                    if (dep.isBusy)
+                      OutlinedButton.icon(
+                        onPressed: onCancel,
+                        icon: const Icon(
+                          Icons.stop_circle_outlined,
+                          size: 16,
+                          color: AppColors.amber500,
+                        ),
+                        label: const Text('取消'),
+                      ),
+                    OutlinedButton.icon(
+                      onPressed: onReinstall,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('重装'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: onDelete,
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        size: 16,
+                        color: AppColors.red500,
+                      ),
+                      label: const Text('卸载'),
+                    ),
+                    FilledButton.tonalIcon(
+                      onPressed: onForceDelete,
+                      icon: const Icon(Icons.delete_forever_outlined, size: 16),
+                      label: const Text('强制卸载'),
+                      style: FilledButton.styleFrom(
+                        foregroundColor: AppColors.red500,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Dep Log Stream Page ──
+
+class DepLogStreamPage extends ConsumerStatefulWidget {
+  final int depId;
+  const DepLogStreamPage({super.key, required this.depId});
+
+  @override
+  ConsumerState<DepLogStreamPage> createState() => _DepLogStreamPageState();
+}
+
+class _DepLogStreamPageState extends ConsumerState<DepLogStreamPage> {
+  final _sseClient = SseClient();
+  final _logs = <String>[];
+  final _scrollController = ScrollController();
+  bool _done = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _sseClient.connect(
+      path: ApiEndpoints.depLogStream(widget.depId),
+      autoReconnect: true,
+      onEvent: (event) {
+        if (!mounted) return;
+        setState(() {
+          _logs.add(event.data);
+          if (event.event == 'done' && event.data != 'reconnect') {
+            _done = true;
+          }
+        });
+        Future.delayed(const Duration(milliseconds: 50), () {
+          if (_scrollController.hasClients) {
+            _scrollController.jumpTo(
+              _scrollController.position.maxScrollExtent,
+            );
+          }
+        });
+      },
+      onDone: () {
+        if (mounted) setState(() => _done = true);
+      },
+      onError: (_) {
+        if (mounted) setState(() => _done = true);
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _sseClient.close();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF1E1E1E),
+      appBar: AppBar(
+        title: const Text('安装日志'),
+        backgroundColor: const Color(0xFF1E1E1E),
+        foregroundColor: Colors.white,
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(12),
+              itemCount: _logs.length,
+              itemBuilder: (_, i) => Text(
+                _logs[i],
+                style: const TextStyle(
+                  color: Color(0xFFD4D4D4),
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  height: 1.6,
+                ),
+              ),
+            ),
+          ),
+          if (_done)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              color: const Color(0xFF252526),
+              child: const Text(
+                '安装完成',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.primary, fontSize: 13),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}

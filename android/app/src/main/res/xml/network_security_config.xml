@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- The server URL is user-configurable, so allow both HTTP and HTTPS. -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

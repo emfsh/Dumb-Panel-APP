@@ -1,0 +1,38 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'app.dart';
+import 'core/auth/auth_interceptor.dart';
+import 'core/auth/auth_provider.dart';
+import 'core/network/dio_client.dart';
+import 'core/storage/secure_storage.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // 恢复服务器地址
+  final serverUrl = await SecureStorage.getServerUrl();
+  if (serverUrl != null && serverUrl.isNotEmpty) {
+    DioClient.instance.setBaseUrl(serverUrl);
+  }
+
+  final container = ProviderContainer();
+
+  // 注入认证拦截器
+  DioClient.instance.dio.interceptors.insert(
+    0,
+    AuthInterceptor(
+      onAuthFailed: () {
+        container.read(authProvider.notifier).setUnauthenticated();
+      },
+    ),
+  );
+
+  // 尝试自动登录
+  if (serverUrl != null && serverUrl.isNotEmpty) {
+    await container.read(authProvider.notifier).restoreSession();
+  }
+
+  runApp(
+    UncontrolledProviderScope(container: container, child: const DaidaiApp()),
+  );
+}

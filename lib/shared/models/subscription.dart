@@ -1,0 +1,117 @@
+class Subscription {
+  final int id;
+  final String name;
+  final String type;
+  final String url;
+  final String branch;
+  final String schedule;
+  final String whitelist;
+  final String blacklist;
+  final bool autoAddTask;
+  final bool autoDelTask;
+  final bool enabled;
+  final double status;
+  final DateTime? lastPullAt;
+  final String saveDir;
+  final int? sshKeyId;
+  final String alias;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const Subscription({
+    required this.id,
+    required this.name,
+    this.type = 'public-repo',
+    this.url = '',
+    this.branch = '',
+    this.schedule = '',
+    this.whitelist = '',
+    this.blacklist = '',
+    this.autoAddTask = false,
+    this.autoDelTask = false,
+    this.enabled = true,
+    this.status = 0,
+    this.lastPullAt,
+    this.saveDir = '',
+    this.sshKeyId,
+    this.alias = '',
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  bool get isRunning => status == 2;
+  bool get isPulling => status == 2;
+  String get normalizedType {
+    switch (type) {
+      case 'file':
+        return 'single-file';
+      case 'public-repo':
+      case 'private-repo':
+        return 'git-repo';
+      case '':
+        return 'git-repo';
+      default:
+        return type;
+    }
+  }
+
+  bool get isSingleFile => normalizedType == 'single-file';
+  bool get isGitRepo => normalizedType == 'git-repo';
+  String get typeLabel {
+    if (isSingleFile) return '单文件';
+    if (isGitRepo) return 'Git 仓库';
+    return normalizedType;
+  }
+
+  String get statusText {
+    if (isRunning) return '拉取中';
+    if (enabled) return '已启用';
+    return '已禁用';
+  }
+
+  factory Subscription.fromJson(Map<String, dynamic> json) {
+    return Subscription(
+      id: _int(json['id']),
+      name: json['name']?.toString() ?? '',
+      type: json['type']?.toString() ?? 'public-repo',
+      url: json['url']?.toString() ?? '',
+      branch: json['branch']?.toString() ?? '',
+      schedule: json['schedule']?.toString() ?? '',
+      whitelist: json['whitelist']?.toString() ?? '',
+      blacklist: json['blacklist']?.toString() ?? '',
+      autoAddTask: json['auto_add_task'] == true,
+      autoDelTask: json['auto_del_task'] == true,
+      enabled: json['enabled'] != false,
+      status: _double(json['status']),
+      lastPullAt: _date(json['last_pull_at']),
+      saveDir: json['save_dir']?.toString() ?? '',
+      sshKeyId: _intOrNull(json['ssh_key_id']),
+      alias: json['alias']?.toString() ?? '',
+      createdAt: _date(json['created_at']) ?? DateTime.now(),
+      updatedAt: _date(json['updated_at']) ?? DateTime.now(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'type': normalizedType,
+    'url': url,
+    'branch': branch,
+    'schedule': schedule,
+    'whitelist': whitelist,
+    'blacklist': blacklist,
+    'auto_add_task': autoAddTask,
+    'auto_del_task': autoDelTask,
+    'save_dir': saveDir,
+    'ssh_key_id': sshKeyId,
+    'alias': alias,
+  };
+}
+
+int _int(dynamic v) => (v is num) ? v.toInt() : 0;
+int? _intOrNull(dynamic v) => (v is num) ? v.toInt() : null;
+double _double(dynamic v) => (v is num) ? v.toDouble() : 0.0;
+DateTime? _date(dynamic v) {
+  if (v is String && v.isNotEmpty) return DateTime.tryParse(v);
+  return null;
+}

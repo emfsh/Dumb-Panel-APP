@@ -1,0 +1,59 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import 'package:logger/logger.dart';
+
+final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
+
+class DioClient {
+  static DioClient? _instance;
+  late final Dio dio;
+  String _baseUrl = '';
+
+  DioClient._() {
+    dio = Dio(
+      BaseOptions(
+        connectTimeout: const Duration(seconds: 15),
+        receiveTimeout: const Duration(seconds: 30),
+        sendTimeout: const Duration(seconds: 15),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ),
+    );
+
+    if (kDebugMode) {
+      dio.interceptors.add(
+        LogInterceptor(
+          request: false,
+          requestHeader: false,
+          requestBody: false,
+          responseHeader: false,
+          responseBody: true,
+          logPrint: (obj) => _logger.d(obj),
+        ),
+      );
+    }
+  }
+
+  static DioClient get instance {
+    _instance ??= DioClient._();
+    return _instance!;
+  }
+
+  String get baseUrl => _baseUrl;
+
+  void setBaseUrl(String url) {
+    _baseUrl = url.endsWith('/') ? url.substring(0, url.length - 1) : url;
+    dio.options.baseUrl = _baseUrl;
+  }
+
+  // 不经过拦截器的原生 Dio，用于 token 刷新
+  Dio get rawDio => Dio(
+    BaseOptions(
+      baseUrl: _baseUrl,
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 10),
+    ),
+  );
+}

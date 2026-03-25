@@ -1,0 +1,524 @@
+import 'dart:async';
+
+import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import '../../../core/network/dio_client.dart';
+import '../../../core/network/api_endpoints.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../shared/models/task_log.dart';
+import '../../../shared/utils/api_utils.dart';
+
+final logListProvider = StateNotifierProvider<LogListNotifier, LogListState>((
+  ref,
+) {
+  return LogListNotifier();
+});
+
+class LogListState {
+  final List<TaskLog> logs;
+  final int total;
+  final bool loading;
+  final String keyword;
+  final String taskIdFilter;
+  final int? statusFilter;
+  const LogListState({
+    this.logs = const [],
+    this.total = 0,
+    this.loading = false,
+    this.keyword = '',
+    this.taskIdFilter = '',
+    this.statusFilter,
+  });
+
+  LogListState copyWith({
+    List<TaskLog>? logs,
+    int? total,
+    bool? loading,
+    String? keyword,
+    String? taskIdFilter,
+    int? statusFilter,
+    bool resetStatusFilter = false,
+  }) {
+    return LogListState(
+      logs: logs ?? this.logs,
+      total: total ?? this.total,
+      loading: loading ?? this.loading,
+      keyword: keyword ?? this.keyword,
+      taskIdFilter: taskIdFilter ?? this.taskIdFilter,
+      statusFilter: resetStatusFilter
+          ? null
+          : statusFilter ?? this.statusFilter,
+    );
+  }
+}
+
+class LogListNotifier extends StateNotifier<LogListState> {
+  LogListNotifier() : super(const LogListState());
+  int _page = 1;
+
+  Future<void> load({bool refresh = false}) async {
+    if (refresh) _page = 1;
+    state = state.copyWith(loading: true);
+    try {
+      final params = <String, dynamic>{'page': _page, 'page_size': 20};
+      if (state.keyword.isNotEmpty) {
+        params['keyword'] = state.keyword;
+      }
+      if (state.taskIdFilter.isNotEmpty) {
+        params['task_id'] = state.taskIdFilter;
+      }
+      if (state.statusFilter != null) {
+        params['status'] = state.statusFilter;
+      }
+      final response = await DioClient.instance.dio.get(
+        ApiEndpoints.logs,
+        queryParameters: params,
+      );
+      final paginated = extractPaginated(response.data);
+      final items = paginated.items.map((e) => TaskLog.fromJson(e)).toList();
+      state = state.copyWith(
+        logs: refresh ? items : [...state.logs, ...items],
+        total: paginated.total,
+        loading: false,
+      );
+    } catch (_) {
+      state = state.copyWith(loading: false);
+    }
+  }
+
+  Future<void> loadMore() async {
+    if (state.loading || state.logs.length >= state.total) return;
+    _page++;
+    await load();
+  }
+
+  void setKeyword(String keyword) {
+    state = state.copyWith(keyword: keyword);
+    load(refresh: true);
+  }
+
+  void setTaskIdFilter(String taskId) {
+    state = state.copyWith(taskIdFilter: taskId);
+    load(refresh: true);
+  }
+
+  void setStatusFilter(int? status) {
+    state = state.copyWith(
+      statusFilter: status,
+      resetStatusFilter: status == null,
+    );
+    load(refresh: true);
+  }
+
+  Future<void> deleteLog(int id) async {
+    await DioClient.instance.dio.delete(ApiEndpoints.logById(id));
+    await load(refresh: true);
+  }
+
+  Future<void> batchDelete(List<int> ids) async {
+    await DioClient.instance.dio.post(
+      ApiEndpoints.logsBatchDelete,
+      data: {'ids': ids},
+    );
+    await load(refresh: true);
+  }
+
+  Future<void> clean({int? days}) async {
+    await DioClient.instance.dio.delete(
+      ApiEndpoints.logsClean,
+      queryParameters: days == null ? null : {'days': days},
+    );
+    await load(refresh: true);
+  }
+}
+
+class LogListPage extends ConsumerStatefulWidget {
+  const LogListPage({super.key});
+
+  @override
+  ConsumerState<LogListPage> createState() => _LogListPageState();
+}
+
+class _LogListPageState extends ConsumerState<LogListPage> {
+  final _scrollController = ScrollController();
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(
+      () => ref.read(logListProvider.notifier).load(refresh: true),
+    );
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 200) {
+        ref.read(logListProvider.notifier).loadMore();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _syncAutoRefresh(LogListState state) {
+    final hasRunning = state.logs.any((log) => log.isRunning);
+    if (hasRunning) {
+      _refreshTimer ??= Timer.periodic(const Duration(seconds: 5), (_) {
+        ref.read(logListProvider.notifier).load(refresh: true);
+      });
+    } else {
+      _refreshTimer?.cancel();
+      _refreshTimer = null;
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _extractError(Object error, String fallback) {
+    if (error is DioException) {
+      final raw = error.response?.data;
+      if (raw is Map) {
+        final data = Map<String, dynamic>.from(raw);
+        final message = data['error'] ?? data['message'];
+        if (message != null && message.toString().trim().isNotEmpty) {
+          return message.toString().trim();
+        }
+      }
+      if ((error.message ?? '').trim().isNotEmpty) {
+        return error.message!.trim();
+      }
+    }
+    final text = error.toString().trim();
+    return text.isEmpty ? fallback : text;
+  }
+
+  Future<void> _handleDelete(TaskLog log) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('删除日志'),
+        content: Text('确定要删除日志 #${log.id} 吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red500),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    try {
+      await ref.read(logListProvider.notifier).deleteLog(log.id);
+      _showMessage('日志已删除');
+    } catch (error) {
+      _showMessage(_extractError(error, '删除失败'));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen<LogListState>(logListProvider, (_, next) {
+      _syncAutoRefresh(next);
+    });
+    final state = ref.watch(logListProvider);
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final dateFormat = DateFormat('MM-dd HH:mm:ss');
+
+    return Scaffold(
+      body: Padding(
+        padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 12),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      '运行日志',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _StatusFilterChip(
+                      label: '全部',
+                      selected: state.statusFilter == null,
+                      onTap: () => ref
+                          .read(logListProvider.notifier)
+                          .setStatusFilter(null),
+                    ),
+                    _StatusFilterChip(
+                      label: '成功',
+                      selected: state.statusFilter == 0,
+                      onTap: () =>
+                          ref.read(logListProvider.notifier).setStatusFilter(0),
+                    ),
+                    _StatusFilterChip(
+                      label: '失败',
+                      selected: state.statusFilter == 1,
+                      onTap: () =>
+                          ref.read(logListProvider.notifier).setStatusFilter(1),
+                      selectedColor: AppColors.red500,
+                    ),
+                    _StatusFilterChip(
+                      label: '运行中',
+                      selected: state.statusFilter == 2,
+                      onTap: () =>
+                          ref.read(logListProvider.notifier).setStatusFilter(2),
+                      selectedColor: AppColors.blue500,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            Expanded(
+              child: RefreshIndicator(
+                color: AppColors.primary,
+                onRefresh: () =>
+                    ref.read(logListProvider.notifier).load(refresh: true),
+                child: state.loading && state.logs.isEmpty
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                        ),
+                      )
+                    : state.logs.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.article_outlined,
+                              size: 56,
+                              color: AppColors.slate400.withAlpha(120),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              '暂无日志',
+                              style: TextStyle(color: AppColors.slate400),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                        itemCount: state.logs.length,
+                        itemBuilder: (_, i) {
+                          final log = state.logs[i];
+                          return _LogItem(
+                            log: log,
+                            isLight: isLight,
+                            dateFormat: dateFormat,
+                            onView: () =>
+                                context.push('/logs/${log.id}/stream'),
+                            onDelete: () => _handleDelete(log),
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LogItem extends StatelessWidget {
+  final TaskLog log;
+  final bool isLight;
+  final DateFormat dateFormat;
+  final VoidCallback onView;
+  final VoidCallback onDelete;
+
+  const _LogItem({
+    required this.log,
+    required this.isLight,
+    required this.dateFormat,
+    required this.onView,
+    required this.onDelete,
+  });
+
+  Color _statusColor() {
+    if (log.isSuccess) return AppColors.primary;
+    if (log.isFailed) return AppColors.red500;
+    return AppColors.blue500;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _statusColor();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: isLight ? Colors.white : AppColors.slate900,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isLight ? AppColors.slate200 : AppColors.slate800,
+        ),
+        boxShadow: isLight
+            ? [
+                BoxShadow(
+                  color: AppColors.slate900.withAlpha(8),
+                  blurRadius: 18,
+                  offset: const Offset(0, 6),
+                ),
+              ]
+            : null,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: InkWell(
+              onTap: onView,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      log.taskName ?? '任务 #${log.taskId}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Theme.of(context).colorScheme.onSurface,
+                        height: 1.2,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '运行时间 ${dateFormat.format(log.startedAt)} · ${log.durationText}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: isLight
+                            ? AppColors.slate500
+                            : AppColors.slate400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: '删除日志',
+            onPressed: onDelete,
+            visualDensity: VisualDensity.compact,
+            splashRadius: 20,
+            icon: const Icon(Icons.delete_outline, size: 20),
+            color: AppColors.red500,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusFilterChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final Color selectedColor;
+
+  const _StatusFilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.selectedColor = AppColors.primary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final foreground = selected
+        ? selectedColor
+        : (isLight ? AppColors.slate600 : AppColors.slate300);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: selected
+                ? selectedColor.withAlpha(16)
+                : (isLight ? AppColors.slate50 : AppColors.slate950),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected
+                  ? selectedColor.withAlpha(70)
+                  : (isLight ? AppColors.slate200 : AppColors.slate800),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: foreground,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
