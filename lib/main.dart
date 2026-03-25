@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'app.dart';
 import 'core/auth/auth_interceptor.dart';
 import 'core/auth/auth_provider.dart';
+import 'core/network/app_user_agent.dart';
 import 'core/network/dio_client.dart';
 import 'core/storage/secure_storage.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppUserAgent.initialize();
 
   // 恢复服务器地址
   final serverUrl = await SecureStorage.getServerUrl();

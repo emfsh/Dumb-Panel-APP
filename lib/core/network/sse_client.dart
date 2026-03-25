@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'app_user_agent.dart';
 import '../network/dio_client.dart';
 import '../storage/secure_storage.dart';
 
@@ -47,6 +48,7 @@ class SseClient {
 
     _client = http.Client();
     final request = http.Request('GET', url);
+    request.headers.addAll(AppUserAgent.defaultHeaders);
     request.headers['Accept'] = 'text/event-stream';
     request.headers['Cache-Control'] = 'no-cache';
     if (token != null) {

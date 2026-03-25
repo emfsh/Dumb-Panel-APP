@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import '../network/app_user_agent.dart';
 import '../network/api_endpoints.dart';
 import '../network/dio_client.dart';
 import '../storage/secure_storage.dart';
@@ -106,6 +107,7 @@ class AuthService {
           baseUrl: serverUrl,
           connectTimeout: const Duration(seconds: 5),
           receiveTimeout: const Duration(seconds: 5),
+          headers: AppUserAgent.defaultHeaders,
         ),
       );
       final response = await dio.get(ApiEndpoints.health);

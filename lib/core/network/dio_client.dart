@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logger/logger.dart';
+import 'app_user_agent.dart';
 
 final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
 
@@ -18,6 +19,7 @@ class DioClient {
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
+          ...AppUserAgent.defaultHeaders,
         },
       ),
     );
@@ -46,6 +48,7 @@ class DioClient {
   void setBaseUrl(String url) {
     _baseUrl = url.endsWith('/') ? url.substring(0, url.length - 1) : url;
     dio.options.baseUrl = _baseUrl;
+    dio.options.headers.addAll(AppUserAgent.defaultHeaders);
   }
 
   // 不经过拦截器的原生 Dio，用于 token 刷新
@@ -54,6 +57,7 @@ class DioClient {
       baseUrl: _baseUrl,
       connectTimeout: const Duration(seconds: 10),
       receiveTimeout: const Duration(seconds: 10),
+      headers: {'Accept': 'application/json', ...AppUserAgent.defaultHeaders},
     ),
   );
 }
