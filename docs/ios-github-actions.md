@@ -6,12 +6,14 @@
 
 - 如果你只是想确认 iOS 代码能不能编译通过，运行 `unsigned` 模式就够了。
 - 如果你想拿到可安装的 `.ipa`，运行 `signed` 模式，并提前准备好 Apple 证书和描述文件。
-- 当前目录本身不是 Git 仓库；要使用 GitHub Actions，先把这份代码推到你自己的 GitHub 仓库。
+- 当前目录已经是 Git 仓库；要使用 GitHub Actions，请先把本地改动提交并推送到远端仓库。
 
 ## 已添加的工作流
 
-- 工作流文件：`/.github/workflows/ios-build.yml`
-- 触发方式：`Actions -> iOS Build -> Run workflow`
+- 手动 iOS 工作流：`/.github/workflows/ios-build.yml`
+- 自动发布工作流：`/.github/workflows/release.yml`
+- 手动触发方式：`Actions -> iOS Build -> Run workflow`
+- 自动发布方式：推送形如 `v1.0.2` 的 tag
 
 ## 模式说明
 
@@ -63,7 +65,7 @@
 
 - Bundle ID：`com.daidai.daidaiApp`
 - iOS Deployment Target：`13.0`
-- App 版本：`1.0.1+2`
+- App 版本：`1.0.2+3`
 
 准备证书和描述文件时，必须和当前 Bundle ID 对得上。
 

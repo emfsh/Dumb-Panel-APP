@@ -21,6 +21,7 @@ import '../../features/security/views/security_page.dart';
 import '../../features/system/views/system_settings_page.dart';
 import '../../features/system/views/backup_page.dart';
 import '../../features/openapi/views/open_api_page.dart';
+import '../../features/app_lock/views/app_lock_settings_page.dart';
 import '../../shared/widgets/main_scaffold.dart';
 import '../../shared/models/task.dart';
 
@@ -202,6 +203,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/security',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (_, state) => const SecurityPage(),
+      ),
+      GoRoute(
+        path: '/app-lock',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (_, state) => const AppLockSettingsPage(),
       ),
       GoRoute(
         path: '/system-settings',

@@ -5,6 +5,7 @@ import '../../../core/auth/auth_provider.dart';
 import '../../../core/storage/secure_storage.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../dashboard/providers/dashboard_provider.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key, this.skipAutoLogin = false});
@@ -147,6 +148,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           ),
         );
       }
+
+      try {
+        ref.invalidate(dashboardProvider);
+        await ref.read(dashboardProvider.notifier).load();
+      } catch (_) {}
     } catch (e) {
       setState(() {
         _error = ref.read(authProvider).error ?? '登录失败';

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'features/app_lock/widgets/app_lock_gate.dart';
 
 class DaidaiApp extends ConsumerWidget {
   const DaidaiApp({super.key});
@@ -18,6 +19,8 @@ class DaidaiApp extends ConsumerWidget {
       themeMode: ThemeMode.system,
       routerConfig: router,
       locale: const Locale('zh', 'CN'),
+      builder: (context, child) =>
+          AppLockGate(child: child ?? const SizedBox.shrink()),
     );
   }
 }

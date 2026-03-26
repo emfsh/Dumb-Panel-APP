@@ -67,6 +67,7 @@ class SecureStorage {
   static const _serverListKey = 'server_list';
   static const _panelsKey = 'panels_config';
   static const _userKey = 'auth_user';
+  static const _appLockConfigKey = 'app_lock_config';
 
   // Token
   static Future<void> saveTokens({
@@ -119,6 +120,30 @@ class SecureStorage {
     await clearTokens();
     await clearUser();
   }
+
+  static Future<void> saveAppLockConfig(Map<String, dynamic> config) =>
+      _storage.write(key: _appLockConfigKey, value: jsonEncode(config));
+
+  static Future<Map<String, dynamic>?> getAppLockConfig() async {
+    final raw = await _storage.read(key: _appLockConfigKey);
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+
+    try {
+      final data = jsonDecode(raw);
+      if (data is Map<String, dynamic>) {
+        return data;
+      }
+      if (data is Map) {
+        return Map<String, dynamic>.from(data);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static Future<void> clearAppLockConfig() =>
+      _storage.delete(key: _appLockConfigKey);
 
   // Server URL
   static Future<void> saveServerUrl(String url) async {

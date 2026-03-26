@@ -5,6 +5,7 @@ import '../../../core/auth/auth_provider.dart';
 import '../../../core/auth/auth_service.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/storage/secure_storage.dart';
+import '../../dashboard/providers/dashboard_provider.dart';
 
 class ServerConfigPage extends ConsumerStatefulWidget {
   const ServerConfigPage({super.key, this.manageMode = false});
@@ -125,6 +126,7 @@ class _ServerConfigPageState extends ConsumerState<ServerConfigPage> {
     await SecureStorage.clearAuthSession();
     DioClient.instance.setBaseUrl(finalUrl);
     await SecureStorage.saveServerUrl(finalUrl);
+    ref.invalidate(dashboardProvider);
 
     if (!mounted) return;
     ref.read(authProvider.notifier).setUnauthenticated();

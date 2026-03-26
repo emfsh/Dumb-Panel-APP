@@ -304,6 +304,18 @@ class _LoginLogsTabState extends ConsumerState<_LoginLogsTab>
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
+                          const SizedBox(height: 2),
+                          Text(
+                            log['client_name']?.toString() ?? '客户端未知',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: widget.isLight
+                                  ? AppColors.slate500
+                                  : AppColors.slate400,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ],
                       ),
                     ),
@@ -510,7 +522,7 @@ class _SessionsTabState extends ConsumerState<_SessionsTab>
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    '客户端: ${s['client_type_label'] ?? '未知'}',
+                                    '客户端: ${s['client_name'] ?? s['client_type_label'] ?? '未知'}',
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: widget.isLight
@@ -518,6 +530,19 @@ class _SessionsTabState extends ConsumerState<_SessionsTab>
                                           : AppColors.slate400,
                                     ),
                                   ),
+                                  if ((s['user_agent']?.toString() ?? '')
+                                      .isNotEmpty)
+                                    Text(
+                                      'UA: ${s['user_agent']}',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: widget.isLight
+                                            ? AppColors.slate500
+                                            : AppColors.slate400,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                                 ],
                               ),
                             ),

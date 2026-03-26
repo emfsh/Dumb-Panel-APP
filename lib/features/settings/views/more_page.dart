@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/auth/auth_provider.dart';
 import '../../../core/theme/app_theme.dart';
 
@@ -108,6 +109,12 @@ class MorePage extends ConsumerWidget {
             title: '消息通知',
             isLight: isLight,
             onTap: () => context.push('/notifications'),
+          ),
+          _SettingsItem(
+            icon: Icons.lock_outline,
+            title: '应用锁',
+            isLight: isLight,
+            onTap: () => context.push('/app-lock'),
           ),
 
           if (user != null && user.isAdmin) ...[
@@ -254,6 +261,7 @@ class MorePage extends ConsumerWidget {
 
   Future<void> _showAboutDialog(BuildContext context) async {
     final isLight = Theme.of(context).brightness == Brightness.light;
+    final packageInfoFuture = PackageInfo.fromPlatform();
     await showDialog<void>(
       context: context,
       builder: (dialogCtx) => AlertDialog(
@@ -277,20 +285,32 @@ class MorePage extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      const Text(
                         '呆呆面板',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                      SizedBox(height: 2),
-                      Text('版本 1.0.1', style: TextStyle(fontSize: 12)),
+                      const SizedBox(height: 2),
+                      FutureBuilder<PackageInfo>(
+                        future: packageInfoFuture,
+                        builder: (context, snapshot) {
+                          final info = snapshot.data;
+                          final versionLabel = info == null
+                              ? '版本 -'
+                              : '版本 ${info.version}${info.buildNumber.trim().isEmpty ? '' : '+${info.buildNumber}'}';
+                          return Text(
+                            versionLabel,
+                            style: const TextStyle(fontSize: 12),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
