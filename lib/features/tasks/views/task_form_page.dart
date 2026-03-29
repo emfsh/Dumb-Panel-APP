@@ -149,6 +149,15 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
     super.dispose();
   }
 
+  void _appendCronRule(String rule) {
+    final current = _cronController.text.trim();
+    if (current.isEmpty) {
+      _cronController.text = rule;
+    } else {
+      _cronController.text = '$current\n$rule';
+    }
+  }
+
   _RandomDelayMode _resolveRandomDelayMode(int? randomDelaySeconds) {
     if (randomDelaySeconds == null) {
       return _RandomDelayMode.inherit;
@@ -390,10 +399,12 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
               if (_taskType == 'cron') ...[
                 TextFormField(
                   controller: _cronController,
+                  maxLines: null,
+                  minLines: 1,
                   decoration: const InputDecoration(
                     labelText: 'Cron 表达式',
                     prefixIcon: Icon(Icons.schedule),
-                    hintText: '0 0 * * *',
+                    hintText: '每行一条规则，如：\n0 0 * * *\n0 30 9 * * *',
                   ),
                   validator: (value) {
                     if (_taskType != 'cron') {
@@ -412,17 +423,17 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
                     _CronPreset(
                       label: '每小时',
                       value: '0 0 * * * *',
-                      onTap: (value) => _cronController.text = value,
+                      onTap: (value) => _appendCronRule(value),
                     ),
                     _CronPreset(
                       label: '每天 9 点',
                       value: '0 0 9 * * *',
-                      onTap: (value) => _cronController.text = value,
+                      onTap: (value) => _appendCronRule(value),
                     ),
                     _CronPreset(
                       label: '每天 0 点',
                       value: '0 0 0 * * *',
-                      onTap: (value) => _cronController.text = value,
+                      onTap: (value) => _appendCronRule(value),
                     ),
                   ],
                 ),

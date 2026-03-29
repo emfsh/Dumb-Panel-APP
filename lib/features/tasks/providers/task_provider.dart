@@ -6,6 +6,8 @@ import '../../../shared/models/task.dart';
 import '../../../shared/models/task_log.dart';
 import '../../../shared/utils/api_utils.dart';
 
+const _unset = Object();
+
 class TaskListState {
   final List<Task> tasks;
   final int total;
@@ -31,8 +33,8 @@ class TaskListState {
     bool? loading,
     String? error,
     String? keyword,
-    String? statusFilter,
-    String? labelFilter,
+    Object? statusFilter = _unset,
+    Object? labelFilter = _unset,
   }) {
     return TaskListState(
       tasks: tasks ?? this.tasks,
@@ -40,8 +42,12 @@ class TaskListState {
       loading: loading ?? this.loading,
       error: error,
       keyword: keyword ?? this.keyword,
-      statusFilter: statusFilter ?? this.statusFilter,
-      labelFilter: labelFilter ?? this.labelFilter,
+      statusFilter: identical(statusFilter, _unset)
+          ? this.statusFilter
+          : statusFilter as String?,
+      labelFilter: identical(labelFilter, _unset)
+          ? this.labelFilter
+          : labelFilter as String?,
     );
   }
 }

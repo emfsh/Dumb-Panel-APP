@@ -109,6 +109,8 @@ class ApiEndpoints {
   static String subscriptionDisable(int id) =>
       '$baseApi/subscriptions/$id/disable';
   static String subscriptionPull(int id) => '$baseApi/subscriptions/$id/pull';
+  static String subscriptionPullStop(int id) =>
+      '$baseApi/subscriptions/$id/pull/stop';
   static String subscriptionPullStream(int id) =>
       '$baseApiV1/subscriptions/$id/pull-stream';
   static String subscriptionLogs(int id) => '$baseApi/subscriptions/$id/logs';

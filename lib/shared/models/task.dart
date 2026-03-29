@@ -3,6 +3,7 @@ class Task {
   final String name;
   final String command;
   final String cronExpression;
+  final List<String> cronExpressions;
   final String taskType;
   final double status;
   final String labels;
@@ -33,6 +34,7 @@ class Task {
     required this.name,
     required this.command,
     required this.cronExpression,
+    this.cronExpressions = const [],
     this.taskType = 'cron',
     required this.status,
     this.labels = '',
@@ -84,6 +86,12 @@ class Task {
       name: json['name']?.toString() ?? '',
       command: json['command']?.toString() ?? '',
       cronExpression: json['cron_expression']?.toString() ?? '',
+      cronExpressions: json['cron_expressions'] is List
+          ? (json['cron_expressions'] as List)
+                .map((e) => e.toString())
+                .where((s) => s.trim().isNotEmpty)
+                .toList()
+          : const [],
       taskType: json['task_type']?.toString() ?? 'cron',
       status: _double(json['status']),
       labels: json['labels'] is List

@@ -1034,7 +1034,11 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
           ),
         );
       },
-    );
+    ).then((_) {
+      nameC.dispose();
+      valueC.dispose();
+      remarksC.dispose();
+    });
   }
 
   void _showCreateDialog() {
@@ -1112,7 +1116,12 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
           ),
         ],
       ),
-    );
+    ).then((_) {
+      nameC.dispose();
+      valueC.dispose();
+      remarksC.dispose();
+      groupC.dispose();
+    });
   }
 }
 

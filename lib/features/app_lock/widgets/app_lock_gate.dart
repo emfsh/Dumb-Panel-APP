@@ -57,15 +57,6 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (ref.read(authProvider).status != AuthStatus.authenticated) {
-      return;
-    }
-
-    if (state == AppLifecycleState.hidden ||
-        state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.paused) {
-      ref.read(appLockProvider.notifier).lockIfEnabled();
-    }
   }
 
   @override

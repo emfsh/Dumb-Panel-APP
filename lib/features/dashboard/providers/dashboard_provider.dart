@@ -37,6 +37,7 @@ class DashboardData {
   String get uptime => system['uptime']?.toString() ?? '-';
   String get hostname => system['hostname']?.toString() ?? '-';
   String get os => system['os']?.toString() ?? '-';
+  String get panelTitle => system['panel_title']?.toString() ?? '';
 
   // 仪表盘数据 — 字段名匹配后端实际返回
   int get totalTasks => (dashboard['task_count'] as num?)?.toInt() ?? 0;
@@ -73,13 +74,22 @@ class DashboardNotifier extends StateNotifier<DashboardData> {
       final results = await Future.wait([
         dio.get(ApiEndpoints.systemInfo),
         dio.get(ApiEndpoints.dashboard),
+        dio.get(ApiEndpoints.panelSettings),
       ]);
-      // system/info: {"data": {...}} → extractData 取出内层
-      // system/dashboard: {"data": {...}} → extractData 取出内层
       final sysData = extractData(results[0].data);
       final dashData = extractData(results[1].data);
+      final panelData = extractData(results[2].data);
+      final sysMap = sysData is Map<String, dynamic>
+          ? Map<String, dynamic>.from(sysData)
+          : <String, dynamic>{};
+      if (panelData is Map) {
+        final title = panelData['panel_title']?.toString() ?? '';
+        if (title.isNotEmpty) {
+          sysMap['panel_title'] = title;
+        }
+      }
       state = state.copyWith(
-        system: sysData is Map<String, dynamic> ? sysData : {},
+        system: sysMap,
         dashboard: dashData is Map<String, dynamic> ? dashData : {},
         loading: false,
       );

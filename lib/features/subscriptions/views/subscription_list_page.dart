@@ -22,22 +22,26 @@ class SubscriptionListState {
   final List<Subscription> items;
   final bool loading;
   final String keyword;
+  final String? error;
 
   const SubscriptionListState({
     this.items = const [],
     this.loading = false,
     this.keyword = '',
+    this.error,
   });
 
   SubscriptionListState copyWith({
     List<Subscription>? items,
     bool? loading,
     String? keyword,
+    String? error,
   }) {
     return SubscriptionListState(
       items: items ?? this.items,
       loading: loading ?? this.loading,
       keyword: keyword ?? this.keyword,
+      error: error,
     );
   }
 }
@@ -59,9 +63,9 @@ class SubscriptionListNotifier extends StateNotifier<SubscriptionListState> {
       final items = paginated.items
           .map((e) => Subscription.fromJson(e))
           .toList();
-      state = state.copyWith(items: items, loading: false);
+      state = state.copyWith(items: items, loading: false, error: null);
     } catch (_) {
-      state = state.copyWith(loading: false);
+      state = state.copyWith(loading: false, error: '加载订阅失败');
     }
   }
 
@@ -89,6 +93,11 @@ class SubscriptionListNotifier extends StateNotifier<SubscriptionListState> {
       );
     }
     await dio.put(ApiEndpoints.subscriptionPull(sub.id));
+    await load();
+  }
+
+  Future<void> stopPull(int id) async {
+    await DioClient.instance.dio.put(ApiEndpoints.subscriptionPullStop(id));
     await load();
   }
 
@@ -300,6 +309,7 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                             sub: sub,
                             isLight: isLight,
                             onPull: () => _doPull(sub),
+                            onStopPull: () => _doStopPull(sub),
                             onLogs: () => _openLogs(sub),
                             onToggle: () => ref
                                 .read(subscriptionListProvider.notifier)
@@ -342,6 +352,25 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  Future<void> _doStopPull(Subscription sub) async {
+    try {
+      await ref.read(subscriptionListProvider.notifier).stopPull(sub.id);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已停止拉取')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_extractRequestErrorMessage(error, '停止拉取失败'))),
+      );
     }
   }
 
@@ -790,6 +819,7 @@ class _SubCard extends StatelessWidget {
   final Subscription sub;
   final bool isLight;
   final VoidCallback onPull;
+  final VoidCallback onStopPull;
   final VoidCallback onLogs;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
@@ -799,6 +829,7 @@ class _SubCard extends StatelessWidget {
     required this.sub,
     required this.isLight,
     required this.onPull,
+    required this.onStopPull,
     required this.onLogs,
     required this.onToggle,
     required this.onDelete,
@@ -943,9 +974,9 @@ class _SubCard extends StatelessWidget {
                   ),
                   const Spacer(),
                   _SmallIconBtn(
-                    icon: Icons.sync,
-                    onTap: onPull,
-                    color: AppColors.primary,
+                    icon: sub.isPulling ? Icons.stop : Icons.sync,
+                    onTap: sub.isPulling ? onStopPull : onPull,
+                    color: sub.isPulling ? AppColors.red500 : AppColors.primary,
                   ),
                   const SizedBox(width: 4),
                   _SmallIconBtn(
@@ -1310,6 +1341,7 @@ class _SubscriptionPullStreamPageState
   }
 
   void _connectStream() {
+    _sseClient.close();
     _sseClient.connect(
       path: ApiEndpoints.subscriptionPullStream(widget.subscriptionId),
       autoReconnect: true,

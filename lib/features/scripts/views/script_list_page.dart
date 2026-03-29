@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -1284,6 +1286,7 @@ class _ScriptViewPageState extends ConsumerState<ScriptViewPage> {
   bool _editing = false;
   String _lastSearchQuery = '';
   Color? _editorBackgroundColor;
+  bool _searchHighlightActive = false;
 
   @override
   void initState() {
@@ -1506,6 +1509,15 @@ class _ScriptViewPageState extends ConsumerState<ScriptViewPage> {
     );
     _contentFocusNode.requestFocus();
     _scrollToMatch(index);
+    setState(() => _searchHighlightActive = true);
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() => _searchHighlightActive = false);
+      }
+    });
+    final prefix = _contentController.text.substring(0, index);
+    final lineNumber = '\n'.allMatches(prefix).length + 1;
+    _showMessage('已定位到第 $lineNumber 行');
     return true;
   }
 
@@ -1705,7 +1717,13 @@ class _ScriptViewPageState extends ConsumerState<ScriptViewPage> {
                               : AppColors.slate800,
                         ),
                       ),
-                      child: TextField(
+                      child: TextSelectionTheme(
+                        data: TextSelectionThemeData(
+                          selectionColor: _searchHighlightActive
+                              ? AppColors.amber500.withAlpha(120)
+                              : AppColors.primary.withAlpha(60),
+                        ),
+                        child: TextField(
                         controller: _contentController,
                         focusNode: _contentFocusNode,
                         scrollController: _contentScrollController,
@@ -1719,10 +1737,12 @@ class _ScriptViewPageState extends ConsumerState<ScriptViewPage> {
                           color: editorForeground,
                         ),
                         cursorColor: editorForeground,
+                        selectionHeightStyle: BoxHeightStyle.max,
                         decoration: const InputDecoration(
                           border: InputBorder.none,
                           contentPadding: EdgeInsets.all(14),
                         ),
+                      ),
                       ),
                     ),
                   ),

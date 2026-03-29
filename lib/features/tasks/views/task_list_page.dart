@@ -523,8 +523,13 @@ class _TaskCard extends StatelessWidget {
   }
 
   String _scheduleText() {
-    if (task.taskType == 'cron' && task.cronExpression.trim().isNotEmpty) {
-      return task.cronExpression;
+    if (task.taskType == 'cron') {
+      if (task.cronExpressions.length > 1) {
+        return task.cronExpressions.join('  |  ');
+      }
+      if (task.cronExpression.trim().isNotEmpty) {
+        return task.cronExpression;
+      }
     }
     return _taskTypeLabel();
   }
@@ -775,7 +780,7 @@ class _TaskCard extends StatelessWidget {
                     onTap: task.isRunning ? onStop : onRun,
                     color: AppColors.primary,
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 8),
                   _SmallIconBtn(
                     icon: task.isDisabled
                         ? Icons.play_circle_outline
@@ -785,9 +790,9 @@ class _TaskCard extends StatelessWidget {
                         ? AppColors.primary
                         : AppColors.amber500,
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 8),
                   _SmallIconBtn(icon: Icons.edit_outlined, onTap: onEdit),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 8),
                   _SmallIconBtn(
                     icon: Icons.more_vert,
                     onTap: () => _showActionMenu(context),
@@ -859,11 +864,22 @@ class _SmallIconBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isLight = theme.brightness == Brightness.light;
+    final btnColor = color ?? AppColors.slate400;
     return GestureDetector(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.all(6),
-        child: Icon(icon, size: 18, color: color ?? AppColors.slate400),
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: btnColor.withAlpha(isLight ? 16 : 22),
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: btnColor.withAlpha(isLight ? 40 : 50),
+          ),
+        ),
+        child: Icon(icon, size: 18, color: btnColor),
       ),
     );
   }

@@ -15,6 +15,8 @@ class Subscription {
   final String saveDir;
   final int? sshKeyId;
   final String alias;
+  final String dependOn;
+  final String hookScript;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -35,6 +37,8 @@ class Subscription {
     this.saveDir = '',
     this.sshKeyId,
     this.alias = '',
+    this.dependOn = '',
+    this.hookScript = '',
     required this.createdAt,
     required this.updatedAt,
   });
@@ -87,6 +91,8 @@ class Subscription {
       saveDir: json['save_dir']?.toString() ?? '',
       sshKeyId: _intOrNull(json['ssh_key_id']),
       alias: json['alias']?.toString() ?? '',
+      dependOn: json['depend_on']?.toString() ?? '',
+      hookScript: json['hook_script']?.toString() ?? '',
       createdAt: _date(json['created_at']) ?? DateTime.now(),
       updatedAt: _date(json['updated_at']) ?? DateTime.now(),
     );
@@ -105,6 +111,8 @@ class Subscription {
     'save_dir': saveDir,
     'ssh_key_id': sshKeyId,
     'alias': alias,
+    'depend_on': dependOn,
+    'hook_script': hookScript,
   };
 }
 

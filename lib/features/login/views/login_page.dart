@@ -375,8 +375,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           maxLength: 6,
                           textInputAction: TextInputAction.go,
                           onFieldSubmitted: (_) => _submit(),
-                          validator: (v) =>
-                              v == null || v.trim().isEmpty ? '请输入验证码' : null,
+                          validator: (v) {
+                            if (v == null || v.trim().isEmpty) return '请输入验证码';
+                            if (v.trim().length != 6) return '验证码为6位数字';
+                            return null;
+                          },
                         ),
                       ),
                     ],
