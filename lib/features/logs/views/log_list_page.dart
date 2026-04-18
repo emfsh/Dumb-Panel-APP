@@ -518,7 +518,7 @@ class _LogItem extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '运行时间 ${dateFormat.format(log.startedAt)} · ${log.durationText}',
+                      '运行时间 ${dateFormat.format(log.startedAt.toLocal())} · ${log.durationText}',
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
