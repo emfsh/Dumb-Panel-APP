@@ -2040,15 +2040,5 @@ String? _detectFormatterLanguage(String path) {
   }
 }
 
-String _extractRequestError(dynamic error, String fallback) {
-  try {
-    final data = (error as dynamic).response?.data;
-    if (data is Map && data['error'] != null) {
-      return data['error'].toString();
-    }
-    if (data is Map && data['message'] != null) {
-      return data['message'].toString();
-    }
-  } catch (_) {}
-  return fallback;
-}
+String _extractRequestError(dynamic error, String fallback) =>
+    extractErrorMessage(error, fallback);

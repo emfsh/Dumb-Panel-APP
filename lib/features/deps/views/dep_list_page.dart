@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -285,21 +284,7 @@ class _DepListPageState extends ConsumerState<DepListPage> {
   }
 
   String _extractError(Object error, String fallback) {
-    if (error is DioException) {
-      final raw = error.response?.data;
-      if (raw is Map) {
-        final data = Map<String, dynamic>.from(raw);
-        final message = data['error'] ?? data['message'];
-        if (message != null && message.toString().trim().isNotEmpty) {
-          return message.toString().trim();
-        }
-      }
-      if ((error.message ?? '').trim().isNotEmpty) {
-        return error.message!.trim();
-      }
-    }
-    final text = error.toString().trim();
-    return text.isEmpty ? fallback : text;
+    return extractErrorMessage(error, fallback);
   }
 
   String _typeLabel(String type) {
@@ -948,28 +933,35 @@ class _DepListPageState extends ConsumerState<DepListPage> {
                 color: AppColors.primary,
                 onRefresh: _loadPageData,
                 child: state.loading && state.items.isEmpty
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.primary,
-                        ),
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          SizedBox(height: 120),
+                          Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
                       )
                     : state.items.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.inventory_2_outlined,
-                              size: 56,
-                              color: AppColors.slate400.withAlpha(120),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          const SizedBox(height: 100),
+                          Icon(
+                            Icons.inventory_2_outlined,
+                            size: 56,
+                            color: AppColors.slate400.withAlpha(120),
+                          ),
+                          const SizedBox(height: 12),
+                          Center(
+                            child: Text(
                               '暂无${_typeLabel(state.selectedType)}依赖',
                               style: const TextStyle(color: AppColors.slate400),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),

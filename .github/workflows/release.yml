@@ -84,6 +84,23 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [[ -n "$KEYSTORE_BASE64" ]]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > android/app/daidai-release.jks
+            cat > android/key.properties <<EOF
+          storeFile=daidai-release.jks
+          storePassword=${KEYSTORE_PASSWORD:-daidai2024}
+          keyAlias=${KEY_ALIAS:-daidai}
+          keyPassword=${KEY_PASSWORD:-daidai2024}
+          EOF
+          fi
+
       - name: Resolve Dart packages
         run: flutter pub get
 

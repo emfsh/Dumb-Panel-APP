@@ -191,16 +191,22 @@ class _LoginLogsTabState extends ConsumerState<_LoginLogsTab>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primary),
-      );
-    }
     final fmt = DateFormat('MM-dd HH:mm:ss');
     return RefreshIndicator(
       color: AppColors.primary,
       onRefresh: _load,
-      child: ListView(
+      child: _loading
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: const [
+                SizedBox(height: 120),
+                Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                ),
+              ],
+            )
+          : ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
         children: [
           Row(
@@ -433,140 +439,160 @@ class _SessionsTabState extends ConsumerState<_SessionsTab>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primary),
-      );
-    }
     final fmt = DateFormat('MM-dd HH:mm');
     return RefreshIndicator(
       color: AppColors.primary,
       onRefresh: _load,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-            child: SizedBox(
-              width: double.infinity,
-              height: 36,
-              child: OutlinedButton.icon(
-                onPressed: _revokeOthers,
-                icon: const Icon(Icons.logout, size: 16),
-                label: const Text('撤销其他会话', style: TextStyle(fontSize: 12)),
-              ),
-            ),
-          ),
-          Expanded(
-            child: _sessions.isEmpty
-                ? const Center(
-                    child: Text(
-                      '暂无会话',
-                      style: TextStyle(color: AppColors.slate400),
+      child: _loading
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: const [
+                SizedBox(height: 120),
+                Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                ),
+              ],
+            )
+          : _sessions.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 36,
+                    child: OutlinedButton.icon(
+                      onPressed: _revokeOthers,
+                      icon: const Icon(Icons.logout, size: 16),
+                      label: const Text('撤销其他会话', style: TextStyle(fontSize: 12)),
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-                    itemCount: _sessions.length,
-                    itemBuilder: (_, i) {
-                      final s = _sessions[i];
-                      final expires = DateTime.tryParse(
-                        s['expires_at']?.toString() ?? '',
-                      );
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: widget.isLight
-                              ? Colors.white
-                              : AppColors.slate900,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: widget.isLight
-                                ? AppColors.slate200
-                                : AppColors.slate800,
-                          ),
-                        ),
-                        child: Row(
+                  ),
+                ),
+                const SizedBox(height: 80),
+                const Center(
+                  child: Text(
+                    '暂无会话',
+                    style: TextStyle(color: AppColors.slate400),
+                  ),
+                ),
+              ],
+            )
+          : ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+              itemCount: _sessions.length + 1,
+              itemBuilder: (_, i) {
+                if (i == 0) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 36,
+                      child: OutlinedButton.icon(
+                        onPressed: _revokeOthers,
+                        icon: const Icon(Icons.logout, size: 16),
+                        label: const Text('撤销其他会话', style: TextStyle(fontSize: 12)),
+                      ),
+                    ),
+                  );
+                }
+                final s = _sessions[i - 1];
+                final expires = DateTime.tryParse(
+                  s['expires_at']?.toString() ?? '',
+                );
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: widget.isLight
+                        ? Colors.white
+                        : AppColors.slate900,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: widget.isLight
+                          ? AppColors.slate200
+                          : AppColors.slate800,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.devices,
+                        size: 18,
+                        color: AppColors.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(
-                              Icons.devices,
-                              size: 18,
-                              color: AppColors.primary,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    '${s['username'] ?? ''} · ${s['ip'] ?? ''}',
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    expires != null
-                                        ? '过期: ${fmt.format(expires.toLocal())}'
-                                        : '',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: widget.isLight
-                                          ? AppColors.slate500
-                                          : AppColors.slate400,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '客户端: ${s['client_name'] ?? s['client_type_label'] ?? '未知'}',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: widget.isLight
-                                          ? AppColors.slate500
-                                          : AppColors.slate400,
-                                    ),
-                                  ),
-                                  if ((s['user_agent']?.toString() ?? '')
-                                      .isNotEmpty)
-                                    Text(
-                                      'UA: ${s['user_agent']}',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: widget.isLight
-                                            ? AppColors.slate500
-                                            : AppColors.slate400,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                ],
+                            Text(
+                              '${s['username'] ?? ''} · ${s['ip'] ?? ''}',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                            GestureDetector(
-                              onTap: () {
-                                final id = (s['id'] as num?)?.toInt();
-                                if (id != null) {
-                                  _revokeSession(id);
-                                }
-                              },
-                              child: const Icon(
-                                Icons.close,
-                                size: 18,
-                                color: AppColors.red500,
+                            const SizedBox(height: 2),
+                            Text(
+                              expires != null
+                                  ? '过期: ${fmt.format(expires.toLocal())}'
+                                  : '',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: widget.isLight
+                                    ? AppColors.slate500
+                                    : AppColors.slate400,
                               ),
                             ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '客户端: ${s['client_name'] ?? s['client_type_label'] ?? '未知'}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: widget.isLight
+                                    ? AppColors.slate500
+                                    : AppColors.slate400,
+                              ),
+                            ),
+                            if ((s['user_agent']?.toString() ?? '')
+                                .isNotEmpty)
+                              Text(
+                                'UA: ${s['user_agent']}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: widget.isLight
+                                      ? AppColors.slate500
+                                      : AppColors.slate400,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                           ],
                         ),
-                      );
-                    },
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          final id = (s['id'] as num?)?.toInt();
+                          if (id != null) {
+                            _revokeSession(id);
+                          }
+                        },
+                        child: const Icon(
+                          Icons.close,
+                          size: 18,
+                          color: AppColors.red500,
+                        ),
+                      ),
+                    ],
                   ),
-          ),
-        ],
-      ),
+                );
+              },
+            ),
     );
   }
 }
@@ -614,116 +640,136 @@ class _IpWhitelistTabState extends ConsumerState<_IpWhitelistTab>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    if (_loading) {
-      return const Center(
-        child: CircularProgressIndicator(color: AppColors.primary),
-      );
-    }
     return RefreshIndicator(
       color: AppColors.primary,
       onRefresh: _load,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-            child: SizedBox(
-              width: double.infinity,
-              height: 36,
-              child: FilledButton.icon(
-                onPressed: _showAddDialog,
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('添加 IP', style: TextStyle(fontSize: 12)),
-              ),
-            ),
-          ),
-          Expanded(
-            child: _items.isEmpty
-                ? const Center(
-                    child: Text(
-                      '暂无白名单',
-                      style: TextStyle(color: AppColors.slate400),
+      child: _loading
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: const [
+                SizedBox(height: 120),
+                Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                ),
+              ],
+            )
+          : _items.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 36,
+                    child: FilledButton.icon(
+                      onPressed: _showAddDialog,
+                      icon: const Icon(Icons.add, size: 16),
+                      label: const Text('添加 IP', style: TextStyle(fontSize: 12)),
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-                    itemCount: _items.length,
-                    itemBuilder: (_, i) {
-                      final item = _items[i];
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: widget.isLight
-                              ? Colors.white
-                              : AppColors.slate900,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: widget.isLight
-                                ? AppColors.slate200
-                                : AppColors.slate800,
-                          ),
-                        ),
-                        child: Row(
+                  ),
+                ),
+                const SizedBox(height: 80),
+                const Center(
+                  child: Text(
+                    '暂无白名单',
+                    style: TextStyle(color: AppColors.slate400),
+                  ),
+                ),
+              ],
+            )
+          : ListView.builder(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+              itemCount: _items.length + 1,
+              itemBuilder: (_, i) {
+                if (i == 0) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 36,
+                      child: FilledButton.icon(
+                        onPressed: _showAddDialog,
+                        icon: const Icon(Icons.add, size: 16),
+                        label: const Text('添加 IP', style: TextStyle(fontSize: 12)),
+                      ),
+                    ),
+                  );
+                }
+                final item = _items[i - 1];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: widget.isLight
+                        ? Colors.white
+                        : AppColors.slate900,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: widget.isLight
+                          ? AppColors.slate200
+                          : AppColors.slate800,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.shield_outlined,
+                        size: 18,
+                        color: AppColors.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(
-                              Icons.shield_outlined,
-                              size: 18,
-                              color: AppColors.primary,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item['ip']?.toString() ?? '',
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      fontFamily: 'monospace',
-                                    ),
-                                  ),
-                                  if ((item['remarks']?.toString() ?? '')
-                                      .isNotEmpty)
-                                    Text(
-                                      item['remarks'].toString(),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: widget.isLight
-                                            ? AppColors.slate500
-                                            : AppColors.slate400,
-                                      ),
-                                    ),
-                                ],
+                            Text(
+                              item['ip']?.toString() ?? '',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'monospace',
                               ),
                             ),
-                            GestureDetector(
-                              onTap: () async {
-                                final id = (item['id'] as num?)?.toInt();
-                                if (id != null) {
-                                  await DioClient.instance.dio.delete(
-                                    ApiEndpoints.ipWhitelistById(id),
-                                  );
-                                  _load();
-                                }
-                              },
-                              child: const Icon(
-                                Icons.delete_outline,
-                                size: 18,
-                                color: AppColors.red500,
+                            if ((item['remarks']?.toString() ?? '')
+                                .isNotEmpty)
+                              Text(
+                                item['remarks'].toString(),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: widget.isLight
+                                      ? AppColors.slate500
+                                      : AppColors.slate400,
+                                ),
                               ),
-                            ),
                           ],
                         ),
-                      );
-                    },
+                      ),
+                      GestureDetector(
+                        onTap: () async {
+                          final id = (item['id'] as num?)?.toInt();
+                          if (id != null) {
+                            await DioClient.instance.dio.delete(
+                              ApiEndpoints.ipWhitelistById(id),
+                            );
+                            _load();
+                          }
+                        },
+                        child: const Icon(
+                          Icons.delete_outline,
+                          size: 18,
+                          color: AppColors.red500,
+                        ),
+                      ),
+                    ],
                   ),
-          ),
-        ],
-      ),
+                );
+              },
+            ),
     );
   }
 

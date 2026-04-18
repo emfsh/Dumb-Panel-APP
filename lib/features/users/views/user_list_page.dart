@@ -208,28 +208,35 @@ class _UserListPageState extends ConsumerState<UserListPage> {
                 color: AppColors.primary,
                 onRefresh: () => ref.read(userListProvider.notifier).load(),
                 child: state.loading && state.items.isEmpty
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.primary,
-                        ),
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          SizedBox(height: 120),
+                          Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
                       )
                     : state.items.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.people_outline,
-                              size: 56,
-                              color: AppColors.slate400.withAlpha(120),
-                            ),
-                            const SizedBox(height: 12),
-                            const Text(
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          const SizedBox(height: 100),
+                          Icon(
+                            Icons.people_outline,
+                            size: 56,
+                            color: AppColors.slate400.withAlpha(120),
+                          ),
+                          const SizedBox(height: 12),
+                          const Center(
+                            child: Text(
                               '暂无用户',
                               style: TextStyle(color: AppColors.slate400),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),

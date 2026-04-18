@@ -17,10 +17,8 @@ class SystemSettingsPage extends ConsumerStatefulWidget {
 class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
   Map<String, dynamic>? _versionInfo;
   Map<String, dynamic>? _updateInfo;
-  Map<String, dynamic> _taskConfigs = {};
   bool _loading = true;
   bool _checking = false;
-  bool _updating = false;
   bool _savingConfigs = false;
 
   // Task execution config controllers
@@ -94,7 +92,6 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
 
       setState(() {
         _versionInfo = versionData is Map<String, dynamic> ? versionData : null;
-        _taskConfigs = configs;
         _loading = false;
       });
     } catch (_) {
@@ -225,7 +222,6 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
   }
 
   Future<void> _doUpdate() async {
-    setState(() => _updating = true);
     try {
       await DioClient.instance.dio.post(
         '${ApiEndpoints.baseApi}/system/update',
@@ -242,7 +238,6 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
         ).showSnackBar(const SnackBar(content: Text('更新失败')));
       }
     }
-    setState(() => _updating = false);
   }
 
   Future<void> _restart() async {
@@ -512,7 +507,7 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
                                       value: _autoInstallDeps,
                                       onChanged: (v) =>
                                           setState(() => _autoInstallDeps = v),
-                                      activeColor: AppColors.primary,
+                                      activeTrackColor: AppColors.primary.withAlpha(100),
                                     ),
                                   ],
                                 ),

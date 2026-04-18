@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -212,6 +214,7 @@ class EnvListPage extends ConsumerStatefulWidget {
 class _EnvListPageState extends ConsumerState<EnvListPage> {
   final _searchController = TextEditingController();
   final Set<int> _selectedIds = <int>{};
+  Timer? _debounce;
 
   bool _selectionMode = false;
 
@@ -223,6 +226,7 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -640,7 +644,10 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                           if (_selectionMode) {
                             _setSelectionMode(false);
                           }
-                          ref.read(envListProvider.notifier).setKeyword(v);
+                          _debounce?.cancel();
+                          _debounce = Timer(const Duration(milliseconds: 300), () {
+                            ref.read(envListProvider.notifier).setKeyword(v);
+                          });
                         },
                       ),
                     ),
@@ -781,28 +788,35 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                 color: AppColors.primary,
                 onRefresh: _refresh,
                 child: state.loading && state.envs.isEmpty
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.primary,
-                        ),
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          SizedBox(height: 120),
+                          Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
                       )
                     : state.envs.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.key_off,
-                              size: 56,
-                              color: AppColors.slate400.withAlpha(120),
-                            ),
-                            const SizedBox(height: 12),
-                            const Text(
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          const SizedBox(height: 100),
+                          Icon(
+                            Icons.key_off,
+                            size: 56,
+                            color: AppColors.slate400.withAlpha(120),
+                          ),
+                          const SizedBox(height: 12),
+                          const Center(
+                            child: Text(
                               '暂无环境变量',
                               style: TextStyle(color: AppColors.slate400),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),

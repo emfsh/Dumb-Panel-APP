@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -144,7 +143,9 @@ class LogListPage extends ConsumerStatefulWidget {
 
 class _LogListPageState extends ConsumerState<LogListPage> {
   final _scrollController = ScrollController();
+  final _searchController = TextEditingController();
   Timer? _refreshTimer;
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -162,7 +163,9 @@ class _LogListPageState extends ConsumerState<LogListPage> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _refreshTimer?.cancel();
+    _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -179,6 +182,12 @@ class _LogListPageState extends ConsumerState<LogListPage> {
     }
   }
 
+  void _resetScroll() {
+    if (_scrollController.hasClients && _scrollController.offset > 0) {
+      _scrollController.jumpTo(0);
+    }
+  }
+
   void _showMessage(String message) {
     if (!mounted) {
       return;
@@ -189,21 +198,7 @@ class _LogListPageState extends ConsumerState<LogListPage> {
   }
 
   String _extractError(Object error, String fallback) {
-    if (error is DioException) {
-      final raw = error.response?.data;
-      if (raw is Map) {
-        final data = Map<String, dynamic>.from(raw);
-        final message = data['error'] ?? data['message'];
-        if (message != null && message.toString().trim().isNotEmpty) {
-          return message.toString().trim();
-        }
-      }
-      if ((error.message ?? '').trim().isNotEmpty) {
-        return error.message!.trim();
-      }
-    }
-    final text = error.toString().trim();
-    return text.isEmpty ? fallback : text;
+    return extractErrorMessage(error, fallback);
   }
 
   Future<void> _handleDelete(TaskLog log) async {
@@ -270,6 +265,68 @@ class _LogListPageState extends ConsumerState<LogListPage> {
 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: '搜索任务名称...',
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: 18,
+                    color: AppColors.slate400,
+                  ),
+                  filled: true,
+                  fillColor: isLight ? Colors.white : AppColors.slate900,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: isLight ? AppColors.slate200 : AppColors.slate800,
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: isLight ? AppColors.slate200 : AppColors.slate800,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: AppColors.primary,
+                      width: 1.5,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  isDense: true,
+                  suffixIcon: _searchController.text.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(
+                            Icons.clear,
+                            size: 16,
+                            color: AppColors.slate400,
+                          ),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {});
+                            ref.read(logListProvider.notifier).setKeyword('');
+                          },
+                        )
+                      : null,
+                ),
+                style: const TextStyle(fontSize: 14),
+                onChanged: (value) {
+                  setState(() {});
+                  _debounce?.cancel();
+                  _debounce = Timer(const Duration(milliseconds: 300), () {
+                    _resetScroll();
+                    ref.read(logListProvider.notifier).setKeyword(value);
+                  });
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Wrap(
@@ -279,28 +336,43 @@ class _LogListPageState extends ConsumerState<LogListPage> {
                     _StatusFilterChip(
                       label: '全部',
                       selected: state.statusFilter == null,
-                      onTap: () => ref
-                          .read(logListProvider.notifier)
-                          .setStatusFilter(null),
+                      onTap: () {
+                        _resetScroll();
+                        ref
+                            .read(logListProvider.notifier)
+                            .setStatusFilter(null);
+                      },
                     ),
                     _StatusFilterChip(
                       label: '成功',
                       selected: state.statusFilter == 0,
-                      onTap: () =>
-                          ref.read(logListProvider.notifier).setStatusFilter(0),
+                      onTap: () {
+                        _resetScroll();
+                        ref
+                            .read(logListProvider.notifier)
+                            .setStatusFilter(0);
+                      },
                     ),
                     _StatusFilterChip(
                       label: '失败',
                       selected: state.statusFilter == 1,
-                      onTap: () =>
-                          ref.read(logListProvider.notifier).setStatusFilter(1),
+                      onTap: () {
+                        _resetScroll();
+                        ref
+                            .read(logListProvider.notifier)
+                            .setStatusFilter(1);
+                      },
                       selectedColor: AppColors.red500,
                     ),
                     _StatusFilterChip(
                       label: '运行中',
                       selected: state.statusFilter == 2,
-                      onTap: () =>
-                          ref.read(logListProvider.notifier).setStatusFilter(2),
+                      onTap: () {
+                        _resetScroll();
+                        ref
+                            .read(logListProvider.notifier)
+                            .setStatusFilter(2);
+                      },
                       selectedColor: AppColors.blue500,
                     ),
                   ],
@@ -315,31 +387,39 @@ class _LogListPageState extends ConsumerState<LogListPage> {
                 onRefresh: () =>
                     ref.read(logListProvider.notifier).load(refresh: true),
                 child: state.loading && state.logs.isEmpty
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.primary,
-                        ),
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          SizedBox(height: 120),
+                          Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
                       )
                     : state.logs.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.article_outlined,
-                              size: 56,
-                              color: AppColors.slate400.withAlpha(120),
-                            ),
-                            const SizedBox(height: 12),
-                            const Text(
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          const SizedBox(height: 100),
+                          Icon(
+                            Icons.article_outlined,
+                            size: 56,
+                            color: AppColors.slate400.withAlpha(120),
+                          ),
+                          const SizedBox(height: 12),
+                          const Center(
+                            child: Text(
                               '暂无日志',
                               style: TextStyle(color: AppColors.slate400),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       )
                     : ListView.builder(
                         controller: _scrollController,
+                        physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
                         itemCount: state.logs.length,
                         itemBuilder: (_, i) {

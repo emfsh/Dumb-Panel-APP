@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../../core/auth/auth_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../providers/dashboard_provider.dart';
+import '../widgets/task_stats_card.dart';
+import '../widgets/trend_chart.dart';
 
 class DashboardPage extends ConsumerStatefulWidget {
   const DashboardPage({super.key});
@@ -82,8 +84,14 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         color: AppColors.primary,
         onRefresh: () => ref.read(dashboardProvider.notifier).load(),
         child: data.loading && data.system.isEmpty
-            ? const Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+            ? ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: const [
+                  SizedBox(height: 120),
+                  Center(
+                    child: CircularProgressIndicator(color: AppColors.primary),
+                  ),
+                ],
               )
             : ListView(
                 padding: EdgeInsets.only(
@@ -230,6 +238,45 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                     isLight: isLight,
                   ),
                   const SizedBox(height: 24),
+
+                  // Task Stats
+                  if (data.totalTasks > 0) ...[
+                    Text(
+                      '任务概览',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurfaceVariant,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TaskStatsCard(
+                      total: data.totalTasks,
+                      enabled: data.enabledTasks,
+                      running: data.runningTasks,
+                      disabled: data.disabledTasks,
+                      todaySuccess: data.todaySuccess,
+                      todayFailed: data.todayFailed,
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // Execution Trend
+                  if (data.executionTrend.isNotEmpty) ...[
+                    Text(
+                      '执行趋势',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurfaceVariant,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TrendChart(data: data.executionTrend),
+                    const SizedBox(height: 24),
+                  ],
 
                   // Quick Actions
                   Text(

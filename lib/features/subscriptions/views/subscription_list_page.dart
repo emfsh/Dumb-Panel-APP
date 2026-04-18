@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -132,6 +134,7 @@ class SubscriptionListPage extends ConsumerStatefulWidget {
 
 class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
   final _searchController = TextEditingController();
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -141,6 +144,7 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -263,7 +267,10 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                   style: const TextStyle(fontSize: 14),
                   onChanged: (v) {
                     setState(() {});
-                    ref.read(subscriptionListProvider.notifier).setKeyword(v);
+                    _debounce?.cancel();
+                    _debounce = Timer(const Duration(milliseconds: 300), () {
+                      ref.read(subscriptionListProvider.notifier).setKeyword(v);
+                    });
                   },
                 ),
               ),
@@ -277,28 +284,35 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                 onRefresh: () =>
                     ref.read(subscriptionListProvider.notifier).load(),
                 child: state.loading && state.items.isEmpty
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.primary,
-                        ),
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          SizedBox(height: 120),
+                          Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
                       )
                     : state.items.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.sync_disabled,
-                              size: 56,
-                              color: AppColors.slate400.withAlpha(120),
-                            ),
-                            const SizedBox(height: 12),
-                            const Text(
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [
+                          const SizedBox(height: 100),
+                          Icon(
+                            Icons.sync_disabled,
+                            size: 56,
+                            color: AppColors.slate400.withAlpha(120),
+                          ),
+                          const SizedBox(height: 12),
+                          const Center(
+                            child: Text(
                               '暂无订阅',
                               style: TextStyle(color: AppColors.slate400),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       )
                     : ListView.builder(
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
@@ -1156,10 +1170,16 @@ class _SubscriptionLogsPageState extends ConsumerState<SubscriptionLogsPage> {
               color: AppColors.primary,
               onRefresh: () => _load(page: _page),
               child: _loading && _logs.isEmpty
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        color: AppColors.primary,
-                      ),
+                  ? ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: const [
+                        SizedBox(height: 120),
+                        Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ],
                     )
                   : _logs.isEmpty
                   ? ListView(
@@ -1439,18 +1459,8 @@ class _SubscriptionPullStreamPageState
   }
 }
 
-String _extractRequestErrorMessage(dynamic error, String fallback) {
-  try {
-    final data = (error as dynamic).response?.data;
-    if (data is Map && data['error'] != null) {
-      return data['error'].toString();
-    }
-    if (data is Map && data['message'] != null) {
-      return data['message'].toString();
-    }
-  } catch (_) {}
-  return fallback;
-}
+String _extractRequestErrorMessage(dynamic error, String fallback) =>
+    extractErrorMessage(error, fallback);
 
 String _subscriptionLogPreview(Map<String, dynamic> log) {
   final content = log['content']?.toString() ?? '';

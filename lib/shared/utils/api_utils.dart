@@ -39,6 +39,27 @@ dynamic extractData(dynamic responseData) {
   return (items: <Map<String, dynamic>>[], total: 0);
 }
 
+/// 从 API 错误响应中提取可读的错误信息
+/// 兼容 Dio 异常和一般异常，优先返回后端返回的 error/message 字段
+String extractErrorMessage(dynamic error, String fallback) {
+  try {
+    final data = (error as dynamic).response?.data;
+    if (data is Map) {
+      final msg = data['error'] ?? data['message'];
+      if (msg != null && msg.toString().trim().isNotEmpty) {
+        return msg.toString().trim();
+      }
+    }
+  } catch (_) {}
+  try {
+    final message = (error as dynamic).message;
+    if (message is String && message.trim().isNotEmpty) {
+      return message.trim();
+    }
+  } catch (_) {}
+  return fallback;
+}
+
 /// 安全转 int
 int? _toInt(dynamic v) {
   if (v == null) return null;

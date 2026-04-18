@@ -780,26 +780,8 @@ class _BackupPageState extends ConsumerState<BackupPage> {
     return null;
   }
 
-  String _extractRequestError(Object error, String fallback) {
-    if (error is DioException) {
-      final raw = error.response?.data;
-      if (raw is Map) {
-        final data = Map<String, dynamic>.from(raw);
-        final message = data['error'] ?? data['message'];
-        if (message != null && message.toString().trim().isNotEmpty) {
-          return message.toString().trim();
-        }
-      }
-      if ((error.message ?? '').trim().isNotEmpty) {
-        return error.message!.trim();
-      }
-    }
-    final text = error.toString().trim();
-    if (text.isEmpty || text == 'Exception') {
-      return fallback;
-    }
-    return text;
-  }
+  String _extractRequestError(Object error, String fallback) =>
+      extractErrorMessage(error, fallback);
 
   String _formatDateTime(DateTime? value) {
     if (value == null) {

@@ -37,6 +37,7 @@ const _taskStatusFilters = [
 class _TaskListPageState extends ConsumerState<TaskListPage> {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -157,8 +158,20 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
     }
   }
 
+  void _onSearchChanged(String value) {
+    setState(() {});
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      if (_scrollController.hasClients && _scrollController.offset > 0) {
+        _scrollController.jumpTo(0);
+      }
+      ref.read(taskProvider.notifier).setKeyword(value);
+    });
+  }
+
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -261,10 +274,7 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                       : null,
                 ),
                 style: const TextStyle(fontSize: 14),
-                onChanged: (value) {
-                  setState(() {});
-                  ref.read(taskProvider.notifier).setKeyword(value);
-                },
+                onChanged: _onSearchChanged,
               ),
             ),
             const SizedBox(height: 12),
@@ -281,9 +291,14 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                   return ChoiceChip(
                     label: Text(filter.label),
                     selected: selected,
-                    onSelected: (_) => ref
-                        .read(taskProvider.notifier)
-                        .setStatusFilter(filter.value),
+                    onSelected: (_) {
+                      if (_scrollController.hasClients && _scrollController.offset > 0) {
+                        _scrollController.jumpTo(0);
+                      }
+                      ref
+                          .read(taskProvider.notifier)
+                          .setStatusFilter(filter.value);
+                    },
                     selectedColor: AppColors.primary.withAlpha(18),
                     side: BorderSide(
                       color: selected
@@ -314,8 +329,12 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                   const Spacer(),
                   if (state.statusFilter != null)
                     TextButton(
-                      onPressed: () =>
-                          ref.read(taskProvider.notifier).setStatusFilter(null),
+                      onPressed: () {
+                        if (_scrollController.hasClients && _scrollController.offset > 0) {
+                          _scrollController.jumpTo(0);
+                        }
+                        ref.read(taskProvider.notifier).setStatusFilter(null);
+                      },
                       child: const Text('清除筛选'),
                     ),
                 ],
@@ -327,15 +346,25 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                 onRefresh: () =>
                     ref.read(taskProvider.notifier).load(refresh: true),
                 child: state.loading && state.tasks.isEmpty
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                          color: AppColors.primary,
-                        ),
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: const [
+                          SizedBox(height: 120),
+                          Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
                       )
                     : state.tasks.isEmpty
-                    ? _buildEmpty()
+                    ? ListView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        children: [_buildEmpty()],
+                      )
                     : ListView.builder(
                         controller: _scrollController,
+                        physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
                         itemCount: state.tasks.length,
                         itemBuilder: (_, index) {
@@ -909,7 +938,7 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
   void initState() {
     super.initState();
     Future.microtask(_loadLogs);
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => _loadLogs());
+    _timer = Timer.periodic(const Duration(seconds: 2), (_) => _loadLogs());
   }
 
   @override
@@ -1077,15 +1106,5 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
   }
 }
 
-String _extractTaskError(dynamic error, String fallback) {
-  try {
-    final data = (error as dynamic).response?.data;
-    if (data is Map && data['error'] != null) {
-      return data['error'].toString();
-    }
-    if (data is Map && data['message'] != null) {
-      return data['message'].toString();
-    }
-  } catch (_) {}
-  return fallback;
-}
+String _extractTaskError(dynamic error, String fallback) =>
+    extractErrorMessage(error, fallback);
