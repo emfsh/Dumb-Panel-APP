@@ -1,9 +1,12 @@
 allprojects {
     repositories {
-        maven { url = uri("https://maven.aliyun.com/repository/google") }
-        maven { url = uri("https://maven.aliyun.com/repository/central") }
         google()
         mavenCentral()
+        // 国内镜像加速（CI 环境不需要）
+        if (System.getenv("CI") == null) {
+            maven { url = uri("https://maven.aliyun.com/repository/google") }
+            maven { url = uri("https://maven.aliyun.com/repository/central") }
+        }
     }
 }
 
