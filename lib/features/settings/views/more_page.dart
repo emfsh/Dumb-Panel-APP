@@ -3,13 +3,52 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/auth/auth_provider.dart';
+import '../../../core/services/app_update_service.dart';
 import '../../../core/theme/app_theme.dart';
 
-class MorePage extends ConsumerWidget {
+class MorePage extends ConsumerStatefulWidget {
   const MorePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MorePage> createState() => _MorePageState();
+}
+
+class _MorePageState extends ConsumerState<MorePage> {
+  AppUpdateInfo? _updateInfo;
+  bool _checking = false;
+
+  Future<void> _checkUpdate({bool silent = false}) async {
+    if (_checking) return;
+    setState(() => _checking = true);
+    try {
+      final info = await AppUpdateService.checkUpdate();
+      if (mounted) {
+        setState(() {
+          _updateInfo = info;
+          _checking = false;
+        });
+        if (info != null && info.hasUpdate && !silent) {
+          AppUpdateService.showUpdateDialog(context, info);
+        } else if (!silent) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('当前已是最新版本')),
+          );
+        }
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _checking = false);
+        if (!silent) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('检查更新失败，请稍后重试')),
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     final user = auth.user;
     final theme = Theme.of(context);
@@ -173,6 +212,31 @@ class MorePage extends ConsumerWidget {
             title: '赞助名单',
             isLight: isLight,
             onTap: () => context.push('/sponsors'),
+          ),
+          _SettingsItem(
+            icon: Icons.system_update_outlined,
+            title: '检查更新',
+            isLight: isLight,
+            trailing: _checking
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.primary,
+                    ),
+                  )
+                : (_updateInfo?.hasUpdate == true
+                    ? Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: AppColors.red500,
+                          shape: BoxShape.circle,
+                        ),
+                      )
+                    : null),
+            onTap: () => _checkUpdate(),
           ),
           _SettingsItem(
             icon: Icons.info_outline,
@@ -367,12 +431,14 @@ class _SettingsItem extends StatelessWidget {
   final String title;
   final bool isLight;
   final VoidCallback onTap;
+  final Widget? trailing;
 
   const _SettingsItem({
     required this.icon,
     required this.title,
     required this.isLight,
     required this.onTap,
+    this.trailing,
   });
 
   @override
@@ -406,6 +472,10 @@ class _SettingsItem extends StatelessWidget {
                 ),
               ),
             ),
+            if (trailing != null) ...[
+              trailing!,
+              const SizedBox(width: 8),
+            ],
             Icon(
               Icons.chevron_right,
               size: 18,

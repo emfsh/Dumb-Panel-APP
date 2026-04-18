@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/auth/auth_provider.dart';
+import '../../../core/services/app_update_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../providers/dashboard_provider.dart';
 import '../widgets/task_stats_card.dart';
@@ -23,7 +24,19 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       if (ref.read(authProvider).user == null) {
         await ref.read(authProvider.notifier).refreshUser();
       }
+      _silentUpdateCheck();
     });
+  }
+
+  Future<void> _silentUpdateCheck() async {
+    try {
+      final info = await AppUpdateService.checkUpdate();
+      if (info != null && info.hasUpdate && mounted) {
+        AppUpdateService.showUpdateDialog(context, info);
+      }
+    } catch (_) {
+      // Silent — do not disturb user on failure
+    }
   }
 
   @override

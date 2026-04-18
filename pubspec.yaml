@@ -1,7 +1,7 @@
 name: daidai_app
 description: "呆呆面板 Flutter 客户端 - 轻量级定时任务管理"
 publish_to: 'none'
-version: 1.0.4+5
+version: 1.0.5+6
 
 environment:
   sdk: ^3.11.3
@@ -37,6 +37,7 @@ dependencies:
   device_info_plus: ^11.2.2
   file_picker: ^8.1.7
   package_info_plus: ^8.3.1
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:
