@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/network/sse_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/task.dart';
 import '../../../shared/utils/api_utils.dart';
@@ -882,127 +883,132 @@ class TaskLiveLogPage extends ConsumerStatefulWidget {
 
 class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
   final ScrollController _scrollController = ScrollController();
-  Timer? _timer;
-  List<String> _logs = [];
+  final _sseClient = SseClient();
+  final _lines = <String>[];
   bool _loading = true;
   bool _done = false;
-  bool _loadingFinalLog = false;
-  int _finalLogAttempts = 0;
-  double? _status;
   bool _autoScroll = false;
+  String _statusText = '连接中...';
 
   @override
   void initState() {
     super.initState();
-    Future.microtask(_loadLogs);
-    _timer = Timer.periodic(const Duration(seconds: 2), (_) => _loadLogs());
+    Future.microtask(_init);
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _sseClient.close();
     _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadLogs() async {
-    try {
-      final resp = await DioClient.instance.dio.get(
-        ApiEndpoints.taskLiveLogs(widget.taskId),
-      );
-      final data = extractData(resp.data);
-      final logs = data is Map && data['logs'] is List
-          ? (data['logs'] as List)
-                .map((e) => e.toString())
-                .where((line) => line.trim().isNotEmpty)
-                .toList()
-          : <String>[];
-      final done = data is Map && data['done'] == true;
-      final status = data is Map && data['status'] is num
-          ? (data['status'] as num).toDouble()
-          : null;
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _logs = logs;
-        _done = done;
-        _status = status;
-        _loading = false;
-      });
-
-      if (_done) {
-        _timer?.cancel();
-        if (!_loadingFinalLog) {
-          _loadingFinalLog = true;
-          unawaited(_loadCompletedLogSnapshot());
-        }
-      }
-
-      if (_autoScroll) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients) {
-            _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-          }
-        });
-      }
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() => _loading = false);
-    }
-  }
-
-  Future<void> _loadCompletedLogSnapshot() async {
+  Future<void> _init() async {
     try {
       final resp = await DioClient.instance.dio.get(
         ApiEndpoints.taskLatestLog(widget.taskId),
       );
       final data = extractData(resp.data);
-      if (data is! Map) {
-        return;
-      }
-      final payload = Map<String, dynamic>.from(data);
-      final content = payload['content']?.toString() ?? '';
-      final historyLines = _splitLines(content);
-      if (!mounted) {
-        return;
-      }
-      if (historyLines.isEmpty) {
-        if (_finalLogAttempts < 3) {
-          _finalLogAttempts++;
-          await Future.delayed(const Duration(milliseconds: 500));
-          if (mounted) {
-            await _loadCompletedLogSnapshot();
-          }
+      if (data is Map<String, dynamic>) {
+        final logId = (data['id'] as num?)?.toInt();
+        final content = data['content']?.toString() ?? '';
+        final isRunning = data['status'] == 0 || data['status'] == null;
+
+        if (content.isNotEmpty) {
+          final lines = content.replaceAll('\r\n', '\n').split('\n');
+          if (lines.isNotEmpty && lines.last.isEmpty) lines.removeLast();
+          _lines.addAll(lines);
+        }
+
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _done = !isRunning;
+            _statusText = isRunning ? '运行中' : '已完成';
+          });
+        }
+
+        if (isRunning && logId != null) {
+          _connectSSE(logId);
         }
         return;
       }
-      setState(() {
-        _logs = historyLines;
-      });
-      if (_autoScroll) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients) {
-            _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-          }
-        });
-      }
-    } catch (_) {
-      // 兜底保持实时页当前内容，避免影响已结束态展示
-    }
+    } catch (_) {}
+
+    if (!mounted) return;
+    setState(() { _loading = false; _statusText = '等待日志...'; });
+    _pollUntilLogReady();
   }
 
-  List<String> _splitLines(String content) {
-    final normalized = content.replaceAll('\r\n', '\n');
-    final lines = normalized.split('\n');
-    if (lines.isNotEmpty && lines.last.isEmpty) {
-      lines.removeLast();
-    }
-    return lines;
+  void _pollUntilLogReady() {
+    Future.delayed(const Duration(seconds: 2), () async {
+      if (!mounted || _done) return;
+      try {
+        final resp = await DioClient.instance.dio.get(
+          ApiEndpoints.taskLatestLog(widget.taskId),
+        );
+        final data = extractData(resp.data);
+        if (data is Map<String, dynamic> && data['id'] != null) {
+          final logId = (data['id'] as num).toInt();
+          final content = data['content']?.toString() ?? '';
+          final isRunning = data['status'] == 0 || data['status'] == null;
+
+          if (content.isNotEmpty) {
+            final lines = content.replaceAll('\r\n', '\n').split('\n');
+            if (lines.isNotEmpty && lines.last.isEmpty) lines.removeLast();
+            if (mounted) setState(() => _lines.addAll(lines));
+          }
+
+          if (isRunning) {
+            _connectSSE(logId);
+          } else if (mounted) {
+            setState(() { _done = true; _statusText = '已完成'; });
+          }
+          return;
+        }
+      } catch (_) {}
+      _pollUntilLogReady();
+    });
+  }
+
+  void _connectSSE(int logId) {
+    _sseClient.connect(
+      path: ApiEndpoints.logStream(logId),
+      autoReconnect: true,
+      onEvent: (event) {
+        if (!mounted) return;
+        if (event.event == 'done') {
+          setState(() { _done = true; _statusText = '已完成'; });
+          return;
+        }
+        final newLines = event.data.replaceAll('\r\n', '\n').split('\n');
+        newLines.removeWhere((l) => l.isEmpty);
+        if (newLines.isEmpty) return;
+        setState(() {
+          _lines.addAll(newLines);
+          _statusText = '运行中';
+        });
+        if (_autoScroll) _scrollToBottom();
+      },
+      onDone: () {
+        if (mounted) setState(() { _done = true; _statusText = '连接结束'; });
+      },
+      onError: (_) {
+        if (mounted) setState(() { _done = true; _statusText = '连接错误'; });
+      },
+    );
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 100),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   @override
@@ -1018,6 +1024,16 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
         backgroundColor: const Color(0xFF1E1E1E),
         foregroundColor: Colors.white,
         actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: Chip(
+              label: Text(_statusText, style: const TextStyle(fontSize: 11)),
+              avatar: _done
+                  ? const Icon(Icons.check, size: 14)
+                  : const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
           IconButton(
             icon: Icon(
               _autoScroll ? Icons.vertical_align_bottom : Icons.pause,
@@ -1025,70 +1041,47 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
             ),
             tooltip: _autoScroll ? '自动滚动: 开' : '自动滚动: 关',
             onPressed: () {
-              setState(() {
-                _autoScroll = !_autoScroll;
-              });
-              if (_autoScroll && _scrollController.hasClients) {
-                _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-              }
+              setState(() => _autoScroll = !_autoScroll);
+              if (_autoScroll) _scrollToBottom();
             },
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.primary),
-                  )
-                : _logs.isEmpty
-                ? Center(
-                    child: Text(
-                      _done && _loadingFinalLog
-                          ? '任务已结束，正在加载完整日志...'
-                          : (_done ? '当前没有实时输出' : '正在等待任务输出...'),
-                      style: const TextStyle(color: Color(0xFFD4D4D4)),
-                    ),
-                  )
-                : Theme(
-                    data: Theme.of(context).copyWith(
-                      textSelectionTheme: TextSelectionThemeData(
-                        selectionColor: AppColors.primary.withAlpha(80),
-                        selectionHandleColor: AppColors.primary,
-                      ),
-                    ),
-                    child: Scrollbar(
-                      controller: _scrollController,
-                      child: SingleChildScrollView(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.all(12),
-                        child: SelectableText(
-                          _logs.join('\n'),
-                          style: const TextStyle(
-                            color: Color(0xFFD4D4D4),
-                            fontFamily: 'monospace',
-                            fontSize: 12,
-                            height: 1.6,
-                          ),
-                        ),
+      body: Container(
+        color: const Color(0xFF1E1E1E),
+        child: _loading && _lines.isEmpty
+            ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+            : _lines.isEmpty
+            ? Center(
+                child: Text(
+                  _done ? '无日志内容' : '等待日志输出...',
+                  style: const TextStyle(color: Color(0xFFD4D4D4)),
+                ),
+              )
+            : Theme(
+                data: Theme.of(context).copyWith(
+                  textSelectionTheme: TextSelectionThemeData(
+                    selectionColor: AppColors.primary.withAlpha(80),
+                    selectionHandleColor: AppColors.primary,
+                  ),
+                ),
+                child: Scrollbar(
+                  controller: _scrollController,
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(12),
+                    child: SelectableText(
+                      _lines.join('\n'),
+                      style: const TextStyle(
+                        color: Color(0xFFD4D4D4),
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                        height: 1.6,
                       ),
                     ),
                   ),
-          ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            color: const Color(0xFF252526),
-            child: Text(
-              _done
-                  ? (_loadingFinalLog ? '任务已结束，正在回填完整日志' : '任务已结束')
-                  : (_status == 2 ? '运行中，如缺依赖会在这里显示自动安装过程' : '任务启动中'),
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.primary, fontSize: 13),
-            ),
-          ),
-        ],
+                ),
+              ),
       ),
     );
   }
