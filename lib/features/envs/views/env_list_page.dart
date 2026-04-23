@@ -1061,75 +1061,75 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
     final remarksC = TextEditingController();
     final groupC = TextEditingController();
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
       useRootNavigator: true,
-      builder: (dialogCtx) => AlertDialog(
-        title: const Text('新建环境变量'),
-        content: SingleChildScrollView(
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            20, 0, 20, MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              Text('新建环境变量',
+                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
               TextField(
                 controller: nameC,
-                decoration: const InputDecoration(labelText: '变量名'),
+                decoration: const InputDecoration(labelText: '变量名', hintText: '如 MY_TOKEN'),
+                textInputAction: TextInputAction.next,
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: valueC,
                 decoration: const InputDecoration(labelText: '值'),
                 maxLines: 3,
+                minLines: 1,
+                textInputAction: TextInputAction.next,
               ),
               const SizedBox(height: 12),
-              TextField(
-                controller: remarksC,
-                decoration: const InputDecoration(labelText: '备注'),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: remarksC,
+                      decoration: const InputDecoration(labelText: '备注'),
+                      textInputAction: TextInputAction.next,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: groupC,
+                      decoration: const InputDecoration(labelText: '分组'),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: groupC,
-                decoration: const InputDecoration(labelText: '分类'),
+              const SizedBox(height: 20),
+              FilledButton(
+                onPressed: () {
+                  if (nameC.text.trim().isEmpty) return;
+                  ref.read(envListProvider.notifier).create(
+                    nameC.text.trim(),
+                    valueC.text,
+                    remarks: remarksC.text.trim(),
+                    group: groupC.text.trim(),
+                  );
+                  Navigator.of(ctx).pop();
+                },
+                style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+                child: const Text('创建'),
               ),
             ],
           ),
-        ),
-        actions: [
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(dialogCtx).pop(),
-                    child: const Text('取消'),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: FilledButton(
-                    onPressed: () {
-                      if (nameC.text.trim().isEmpty) return;
-                      ref
-                          .read(envListProvider.notifier)
-                          .create(
-                            nameC.text.trim(),
-                            valueC.text,
-                            remarks: remarksC.text.trim(),
-                            group: groupC.text.trim(),
-                          );
-                      Navigator.of(dialogCtx).pop();
-                    },
-                    child: const Text('创建'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+        );
+      },
     ).then((_) {
       nameC.dispose();
       valueC.dispose();
@@ -1267,15 +1267,12 @@ class _EnvCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = env.enabled ? AppColors.primary : AppColors.slate400;
-    final statusText = env.enabled ? '启用中' : '已禁用';
-
     return GestureDetector(
       onTap: onTap,
       onLongPress: onLongPress,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        margin: const EdgeInsets.only(bottom: 10),
+        margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: isLight ? Colors.white : AppColors.slate900,
@@ -1287,60 +1284,70 @@ class _EnvCard extends StatelessWidget {
             width: selected ? 1.4 : 1,
           ),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (selectionMode) ...[
-              Checkbox(
-                value: selected,
-                onChanged: (_) => onSelectedChanged(),
-                activeColor: AppColors.primary,
-                visualDensity: VisualDensity.compact,
-              ),
-              const SizedBox(width: 4),
-            ],
-            Expanded(
+            Row(
+              children: [
+                if (selectionMode) ...[
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Checkbox(
+                      value: selected,
+                      onChanged: (_) => onSelectedChanged(),
+                      activeColor: AppColors.primary,
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: env.enabled ? AppColors.primary : AppColors.slate300,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    env.name,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: isLight ? AppColors.blue600 : AppColors.blue500,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (!selectionMode) ...[
+                  _MiniBtn(icon: Icons.copy_outlined, isLight: isLight, onTap: onCopy),
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    onTap: onToggle,
+                    child: Icon(
+                      env.enabled ? Icons.toggle_on : Icons.toggle_off_outlined,
+                      size: 32,
+                      color: env.enabled ? AppColors.primary : AppColors.slate400,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            Padding(
+              padding: EdgeInsets.only(left: selectionMode ? 32 : 14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          env.name,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: isLight
-                                ? AppColors.blue600
-                                : AppColors.blue500,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: statusColor.withAlpha(18),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          statusText,
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: statusColor,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 4),
                   Text(
                     env.value.replaceAll('\n', ' '),
                     style: TextStyle(
-                      fontSize: 10,
+                      fontSize: 11,
                       fontFamily: 'monospace',
                       color: isLight ? AppColors.slate500 : AppColors.slate400,
                     ),
@@ -1353,9 +1360,8 @@ class _EnvCard extends StatelessWidget {
                       env.remarks,
                       style: TextStyle(
                         fontSize: 10,
-                        color: isLight
-                            ? AppColors.slate400
-                            : AppColors.slate500,
+                        color: isLight ? AppColors.slate400 : AppColors.slate500,
+                        fontStyle: FontStyle.italic,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -1364,25 +1370,6 @@ class _EnvCard extends StatelessWidget {
                 ],
               ),
             ),
-            if (!selectionMode) ...[
-              const SizedBox(width: 8),
-              _MiniBtn(icon: Icons.copy, isLight: isLight, onTap: onCopy),
-              const SizedBox(width: 6),
-              _MiniBtn(
-                icon: env.enabled
-                    ? Icons.pause_circle_outline
-                    : Icons.play_circle_outline,
-                isLight: isLight,
-                color: env.enabled ? AppColors.slate500 : AppColors.primary,
-                onTap: onToggle,
-              ),
-              const SizedBox(width: 6),
-              _MiniBtn(
-                icon: Icons.edit_outlined,
-                isLight: isLight,
-                onTap: onEdit,
-              ),
-            ],
           ],
         ),
       ),

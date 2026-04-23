@@ -20,6 +20,7 @@ const _apiScopeOptions = [
   _ApiScopeOption('tasks', '任务管理', '读取与操作定时任务'),
   _ApiScopeOption('scripts', '脚本管理', '访问脚本目录和执行入口'),
   _ApiScopeOption('envs', '环境变量', '读取和维护环境变量'),
+  _ApiScopeOption('subscriptions', '订阅管理', '管理订阅仓库和文件'),
   _ApiScopeOption('logs', '日志查看', '读取执行日志和流式输出'),
   _ApiScopeOption('system', '系统信息', '读取系统信息和状态数据'),
 ];

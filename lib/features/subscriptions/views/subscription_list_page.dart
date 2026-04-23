@@ -437,6 +437,7 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
     final nameC = TextEditingController();
     final urlC = TextEditingController();
     final branchC = TextEditingController();
+    final subPathC = TextEditingController();
     final scheduleC = TextEditingController();
     final saveDirC = TextEditingController();
     final aliasC = TextEditingController();
@@ -596,6 +597,7 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                                       'type': selectedType,
                                       'url': urlC.text.trim(),
                                       'branch': branchC.text.trim(),
+                                      'sub_path': subPathC.text.trim(),
                                       'schedule': scheduleC.text.trim(),
                                       'save_dir': saveDirC.text.trim(),
                                       'alias': aliasC.text.trim(),
@@ -633,6 +635,7 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
     final nameC = TextEditingController(text: sub.name);
     final urlC = TextEditingController(text: sub.url);
     final branchC = TextEditingController(text: sub.branch);
+    final subPathC = TextEditingController(text: sub.subPath ?? '');
     final scheduleC = TextEditingController(text: sub.schedule);
     final saveDirC = TextEditingController(text: sub.saveDir);
     final aliasC = TextEditingController(text: sub.alias);
@@ -729,6 +732,14 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                                 ),
                               ),
                               const SizedBox(height: 12),
+                              TextField(
+                                controller: subPathC,
+                                decoration: const InputDecoration(
+                                  labelText: '子目录 (可选)',
+                                  hintText: '仅拉取仓库内指定子目录',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
                             ],
                             TextField(
                               controller: scheduleC,
@@ -799,6 +810,7 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                                       'type': selectedType,
                                       'url': urlC.text.trim(),
                                       'branch': branchC.text.trim(),
+                                      'sub_path': subPathC.text.trim(),
                                       'schedule': scheduleC.text.trim(),
                                       'save_dir': saveDirC.text.trim(),
                                       'alias': aliasC.text.trim(),

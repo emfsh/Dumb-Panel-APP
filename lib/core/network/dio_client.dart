@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:logger/logger.dart';
+import '../storage/secure_storage.dart';
 import 'app_user_agent.dart';
 
 final _logger = Logger(printer: PrettyPrinter(methodCount: 0));
@@ -23,6 +26,8 @@ class DioClient {
         },
       ),
     );
+
+    dio.interceptors.add(_SchemeRetryInterceptor(this));
 
     if (kDebugMode) {
       dio.interceptors.add(
@@ -51,7 +56,6 @@ class DioClient {
     dio.options.headers.addAll(AppUserAgent.defaultHeaders);
   }
 
-  // 不经过拦截器的原生 Dio，用于 token 刷新
   Dio get rawDio => Dio(
     BaseOptions(
       baseUrl: _baseUrl,
@@ -60,4 +64,58 @@ class DioClient {
       headers: {'Accept': 'application/json', ...AppUserAgent.defaultHeaders},
     ),
   );
+}
+
+class _SchemeRetryInterceptor extends Interceptor {
+  final DioClient _client;
+  bool _retrying = false;
+
+  _SchemeRetryInterceptor(this._client);
+
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) async {
+    if (_retrying) {
+      handler.next(err);
+      return;
+    }
+
+    final isNetworkError = err.type == DioExceptionType.connectionTimeout ||
+        err.type == DioExceptionType.connectionError ||
+        err.type == DioExceptionType.unknown && err.error is SocketException;
+
+    if (!isNetworkError) {
+      handler.next(err);
+      return;
+    }
+
+    final currentBase = _client._baseUrl;
+    final altBase = _flipScheme(currentBase);
+    if (altBase == currentBase) {
+      handler.next(err);
+      return;
+    }
+
+    _retrying = true;
+    try {
+      _client.setBaseUrl(altBase);
+      await SecureStorage.saveServerUrl(altBase);
+
+      final opts = err.requestOptions;
+      opts.baseUrl = altBase;
+      final response = await _client.dio.fetch(opts);
+      handler.resolve(response);
+    } catch (retryErr) {
+      _client.setBaseUrl(currentBase);
+      await SecureStorage.saveServerUrl(currentBase);
+      handler.next(err);
+    } finally {
+      _retrying = false;
+    }
+  }
+
+  static String _flipScheme(String url) {
+    if (url.startsWith('https://')) return 'http://${url.substring(8)}';
+    if (url.startsWith('http://')) return 'https://${url.substring(7)}';
+    return url;
+  }
 }

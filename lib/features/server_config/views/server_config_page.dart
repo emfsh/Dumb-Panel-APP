@@ -45,15 +45,34 @@ class _ServerConfigPageState extends ConsumerState<ServerConfigPage> {
     }
   }
 
+  static final _ipPattern = RegExp(
+    r'^(\d{1,3}\.){3}\d{1,3}(:\d+)?$|'
+    r'^\[.*\](:\d+)?$|'
+    r'^localhost(:\d+)?$',
+  );
+
   String _normalizeUrl(String rawUrl) {
     var finalUrl = rawUrl.trim();
     if (!finalUrl.startsWith('http')) {
-      finalUrl = 'http://$finalUrl';
+      final hostPart = finalUrl.split('/').first;
+      finalUrl = _ipPattern.hasMatch(hostPart)
+          ? 'http://$finalUrl'
+          : 'https://$finalUrl';
     }
     if (finalUrl.endsWith('/')) {
       finalUrl = finalUrl.substring(0, finalUrl.length - 1);
     }
     return finalUrl;
+  }
+
+  String _flipScheme(String url) {
+    if (url.startsWith('https://')) {
+      return 'http://${url.substring(8)}';
+    }
+    if (url.startsWith('http://')) {
+      return 'https://${url.substring(7)}';
+    }
+    return url;
   }
 
   void _showMessage(String message) {
@@ -160,16 +179,22 @@ class _ServerConfigPageState extends ConsumerState<ServerConfigPage> {
       _error = null;
     });
 
-    final finalUrl = _normalizeUrl(_controller.text);
+    var finalUrl = _normalizeUrl(_controller.text);
     final authService = AuthService();
-    final ok = await authService.checkHealth(finalUrl);
+    var ok = await authService.checkHealth(finalUrl);
 
     if (!ok) {
-      setState(() {
-        _checking = false;
-        _error = '无法连接到服务器，请检查地址';
-      });
-      return;
+      final altUrl = _flipScheme(finalUrl);
+      ok = await authService.checkHealth(altUrl);
+      if (ok) {
+        finalUrl = altUrl;
+      } else {
+        setState(() {
+          _checking = false;
+          _error = '无法连接到服务器，已尝试 HTTP 和 HTTPS，请检查地址';
+        });
+        return;
+      }
     }
 
     final existing = _panels.where((p) => p.url == finalUrl).firstOrNull;
@@ -366,7 +391,7 @@ class _ServerConfigPageState extends ConsumerState<ServerConfigPage> {
                       controller: _controller,
                       decoration: const InputDecoration(
                         labelText: '服务器地址',
-                        hintText: 'http://192.168.1.100:5700',
+                        hintText: '192.168.1.100:5700 或 panel.example.com',
                         prefixIcon: Icon(Icons.link),
                       ),
                       keyboardType: TextInputType.url,

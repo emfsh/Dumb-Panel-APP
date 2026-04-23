@@ -211,15 +211,20 @@ class _LogStreamPageState extends State<LogStreamPage> {
                   style: const TextStyle(color: AppColors.termText),
                 ),
               )
-            : SelectionArea(
+            : Theme(
+                data: Theme.of(context).copyWith(
+                  textSelectionTheme: TextSelectionThemeData(
+                    selectionColor: AppColors.primary.withAlpha(80),
+                    selectionHandleColor: AppColors.primary,
+                  ),
+                ),
                 child: Scrollbar(
                   controller: _scrollController,
-                  child: ListView.builder(
+                  child: SingleChildScrollView(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(12),
-                    itemCount: _lines.length,
-                    itemBuilder: (_, i) => Text(
-                      _lines[i],
+                    child: SelectableText(
+                      _lines.join('\n'),
                       style: const TextStyle(
                         fontFamily: 'monospace',
                         fontSize: 13,

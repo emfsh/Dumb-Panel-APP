@@ -21,7 +21,6 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
   bool _checking = false;
   bool _savingConfigs = false;
 
-  // Task execution config controllers
   final _timeoutC = TextEditingController();
   final _concurrencyC = TextEditingController();
   final _logRetentionC = TextEditingController();
@@ -29,6 +28,7 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
   final _randomDelayC = TextEditingController();
   final _fileSuffixC = TextEditingController();
   final _editorBackgroundColorC = TextEditingController();
+  final _proxyUrlC = TextEditingController();
   bool _autoInstallDeps = false;
 
   @override
@@ -46,6 +46,7 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
     _randomDelayC.dispose();
     _fileSuffixC.dispose();
     _editorBackgroundColorC.dispose();
+    _proxyUrlC.dispose();
     super.dispose();
   }
 
@@ -89,6 +90,7 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
       );
       _autoInstallDeps =
           _getConfigValue(configs, 'auto_install_deps', 'false') == 'true';
+      _proxyUrlC.text = _getConfigValue(configs, 'proxy_url', '');
 
       setState(() {
         _versionInfo = versionData is Map<String, dynamic> ? versionData : null;
@@ -305,6 +307,7 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
             'random_delay_extensions': _fileSuffixC.text.trim(),
             'auto_install_deps': _autoInstallDeps ? 'true' : 'false',
             'editor_background_color': _editorBackgroundColorC.text.trim(),
+            'proxy_url': _proxyUrlC.text.trim(),
           },
         },
       );
@@ -418,135 +421,89 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
                             ),
                           ],
 
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 20),
 
-                          // ── Task Execution Settings ──
-                          _SectionTitle('任务执行'),
+                          // ── 任务运行 ──
+                          _SectionTitle('任务运行'),
                           const SizedBox(height: 8),
                           _Card(
                             isLight: isLight,
                             child: Column(
                               children: [
-                                _ConfigField(
-                                  label: '全局默认超时（秒）',
-                                  hint: '单个任务未设超时时使用此值',
-                                  controller: _timeoutC,
-                                  isLight: isLight,
-                                ),
-                                const SizedBox(height: 14),
-                                _ConfigField(
-                                  label: '定时任务并发数',
-                                  hint: '同时执行的最大任务数量',
-                                  controller: _concurrencyC,
-                                  isLight: isLight,
-                                ),
-                                const SizedBox(height: 14),
-                                _ConfigField(
-                                  label: '日志删除频率（天）',
-                                  hint: '日志清理接口默认保留近多少天的数据',
-                                  controller: _logRetentionC,
-                                  isLight: isLight,
-                                ),
-                                const SizedBox(height: 14),
-                                _ConfigField(
-                                  label: '日志内容上限（字节）',
-                                  hint: '单次任务在数据库中保留的日志字节数',
-                                  controller: _logMaxSizeC,
-                                  isLight: isLight,
-                                ),
-                                const SizedBox(height: 14),
-                                _ConfigField(
-                                  label: '随机延迟最大秒数',
-                                  hint: '留空或 0 表示不延迟',
-                                  controller: _randomDelayC,
-                                  isLight: isLight,
-                                ),
-                                const SizedBox(height: 14),
-                                _ConfigField(
-                                  label: '延迟文件后缀',
-                                  hint: '如 js py，空格分隔',
-                                  controller: _fileSuffixC,
-                                  isLight: isLight,
-                                ),
-                                const SizedBox(height: 14),
-                                _ConfigField(
-                                  label: '编辑器背景色',
-                                  hint:
-                                      '支持 #ffffff、#111827 或 rgba(...)，留空使用默认值',
-                                  controller: _editorBackgroundColorC,
-                                  isLight: isLight,
-                                ),
-                                const SizedBox(height: 14),
                                 Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const Text(
-                                          '自动安装缺失依赖',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        Text(
-                                          '脚本运行失败且检测到缺失依赖时自动安装',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: isLight
-                                                ? AppColors.slate500
-                                                : AppColors.slate400,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    Switch(
-                                      value: _autoInstallDeps,
-                                      onChanged: (v) =>
-                                          setState(() => _autoInstallDeps = v),
-                                      activeTrackColor: AppColors.primary.withAlpha(100),
-                                    ),
+                                    Expanded(child: _ConfigField(label: '默认超时(秒)', hint: '86400', controller: _timeoutC, isLight: isLight)),
+                                    const SizedBox(width: 12),
+                                    Expanded(child: _ConfigField(label: '并发数', hint: '5', controller: _concurrencyC, isLight: isLight)),
                                   ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(child: _ConfigField(label: '日志保留(天)', hint: '7', controller: _logRetentionC, isLight: isLight)),
+                                    const SizedBox(width: 12),
+                                    Expanded(child: _ConfigField(label: '日志上限(字节)', hint: '102400', controller: _logMaxSizeC, isLight: isLight)),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(child: _ConfigField(label: '随机延迟(秒)', hint: '0 不延迟', controller: _randomDelayC, isLight: isLight)),
+                                    const SizedBox(width: 12),
+                                    Expanded(child: _ConfigField(label: '延迟文件后缀', hint: 'js py', controller: _fileSuffixC, isLight: isLight)),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                SwitchListTile.adaptive(
+                                  value: _autoInstallDeps,
+                                  contentPadding: EdgeInsets.zero,
+                                  dense: true,
+                                  title: const Text('自动安装缺失依赖', style: TextStyle(fontSize: 13)),
+                                  subtitle: Text('运行失败时自动安装', style: TextStyle(fontSize: 11, color: isLight ? AppColors.slate500 : AppColors.slate400)),
+                                  onChanged: (v) => setState(() => _autoInstallDeps = v),
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 12),
+
+                          const SizedBox(height: 20),
+
+                          // ── 面板外观 ──
+                          _SectionTitle('面板外观'),
+                          const SizedBox(height: 8),
+                          _Card(
+                            isLight: isLight,
+                            child: _ConfigField(label: '日志背景色', hint: '#111827 或 rgba(...)，留空默认', controller: _editorBackgroundColorC, isLight: isLight),
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          // ── 代理设置 ──
+                          _SectionTitle('代理设置'),
+                          const SizedBox(height: 8),
+                          _Card(
+                            isLight: isLight,
+                            child: _ConfigField(label: '代理地址', hint: 'http://127.0.0.1:7890，留空不使用代理', controller: _proxyUrlC, isLight: isLight),
+                          ),
+
+                          const SizedBox(height: 16),
                           SizedBox(
                             width: double.infinity,
                             height: 44,
                             child: FilledButton(
-                              onPressed: _savingConfigs
-                                  ? null
-                                  : _saveTaskConfigs,
-                              child: Text(_savingConfigs ? '保存中...' : '保存任务配置'),
+                              onPressed: _savingConfigs ? null : _saveTaskConfigs,
+                              child: Text(_savingConfigs ? '保存中...' : '保存配置'),
                             ),
                           ),
 
                           const SizedBox(height: 24),
 
-                          // ── System Operations ──
+                          // ── 系统操作 ──
                           _SectionTitle('系统操作'),
                           const SizedBox(height: 8),
-                          _ActionBtn(
-                            icon: Icons.backup,
-                            title: '数据备份与恢复',
-                            subtitle: '创建备份、恢复、管理备份文件',
-                            isLight: isLight,
-                            onTap: () => context.push('/backup'),
-                          ),
+                          _ActionBtn(icon: Icons.backup, title: '备份恢复', subtitle: '创建备份、恢复、管理备份文件', isLight: isLight, onTap: () => context.push('/backup')),
                           const SizedBox(height: 8),
-                          _ActionBtn(
-                            icon: Icons.restart_alt,
-                            title: '重启面板',
-                            subtitle: '重启面板服务',
-                            isLight: isLight,
-                            onTap: _restart,
-                            danger: true,
-                          ),
+                          _ActionBtn(icon: Icons.restart_alt, title: '重启面板', subtitle: '重启面板服务，运行中任务将中断', isLight: isLight, onTap: _restart, danger: true),
                         ],
                       ),
                     ),

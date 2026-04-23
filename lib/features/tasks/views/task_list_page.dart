@@ -668,11 +668,11 @@ class _TaskCard extends StatelessWidget {
       onTap: onTap,
       onLongPress: () => _showActionMenu(context),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: isLight ? Colors.white : AppColors.slate900,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: hasFailure ? AppColors.red500.withAlpha(60) : borderColor,
           ),
@@ -688,146 +688,102 @@ class _TaskCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: dotColor,
                     shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: dotColor.withAlpha(140),
-                        blurRadius: task.isRunning || hasFailure ? 8 : 0,
-                      ),
-                    ],
+                    boxShadow: task.isRunning || hasFailure
+                        ? [BoxShadow(color: dotColor.withAlpha(140), blurRadius: 8)]
+                        : null,
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          task.name,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (task.isPinned) ...[
-                        const SizedBox(width: 6),
-                        const Icon(
-                          Icons.push_pin,
-                          size: 15,
-                          color: AppColors.amber500,
-                        ),
-                      ],
-                    ],
+                  child: Text(
+                    task.name,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
+                if (task.isPinned)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 6),
+                    child: Icon(Icons.push_pin, size: 14, color: AppColors.amber500),
                   ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: _statusBg(),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
                     _statusLabel(),
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: _statusFg(),
-                    ),
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _statusFg()),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            Text(
-              _scheduleText(),
-              style: TextStyle(
-                fontSize: 12,
-                fontFamily: 'monospace',
-                color: isLight ? AppColors.slate600 : AppColors.slate400,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+            const SizedBox(height: 8),
+            Row(
               children: [
-                _MetaChip(
-                  icon: task.taskType == 'cron'
-                      ? Icons.schedule_outlined
-                      : task.taskType == 'manual'
-                      ? Icons.touch_app_outlined
+                Icon(
+                  task.taskType == 'cron' ? Icons.schedule_outlined
+                      : task.taskType == 'manual' ? Icons.touch_app_outlined
                       : Icons.power_settings_new_outlined,
-                  label: _taskTypeLabel(),
+                  size: 12,
+                  color: isLight ? AppColors.slate400 : AppColors.slate500,
                 ),
-                ...labels.take(3).map((label) => _MetaChip(label: label)),
-                if (labels.length > 3)
-                  _MetaChip(label: '+${labels.length - 3}'),
-                if ((task.notificationChannelName?.trim().isNotEmpty ?? false))
-                  _MetaChip(
-                    icon: Icons.notifications_active_outlined,
-                    label: task.notificationChannelName!,
-                    active: task.notificationChannelEnabled != false,
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    _scheduleText(),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                      color: isLight ? AppColors.slate500 : AppColors.slate400,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
+                ),
               ],
             ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.only(top: 10),
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(
-                    color: isLight
-                        ? AppColors.slate100
-                        : AppColors.slate800.withAlpha(120),
-                  ),
-                ),
-              ),
-              child: Row(
+            if (labels.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
                 children: [
-                  Expanded(
-                    child: Text(
-                      _bottomText(),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: hasFailure
-                            ? AppColors.red500
-                            : (isLight
-                                  ? AppColors.slate500
-                                  : AppColors.slate400),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  _SmallIconBtn(
-                    icon: task.isRunning ? Icons.stop : Icons.play_arrow,
-                    onTap: task.isRunning ? onStop : onRun,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  _SmallIconBtn(
-                    icon: task.isDisabled
-                        ? Icons.play_circle_outline
-                        : Icons.pause_circle_outline,
-                    onTap: onToggleEnabled,
-                    color: task.isDisabled
-                        ? AppColors.primary
-                        : AppColors.amber500,
-                  ),
-                  const SizedBox(width: 8),
-                  _SmallIconBtn(icon: Icons.edit_outlined, onTap: onEdit),
-                  const SizedBox(width: 8),
-                  _SmallIconBtn(
-                    icon: Icons.more_vert,
-                    onTap: () => _showActionMenu(context),
-                  ),
+                  ...labels.take(3).map((label) => _MetaChip(label: label)),
+                  if (labels.length > 3) _MetaChip(label: '+${labels.length - 3}'),
                 ],
               ),
+            ],
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _bottomText(),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: hasFailure ? AppColors.red500 : (isLight ? AppColors.slate400 : AppColors.slate500),
+                    ),
+                  ),
+                ),
+                _SmallIconBtn(
+                  icon: task.isRunning ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                  onTap: task.isRunning ? onStop : onRun,
+                  color: task.isRunning ? AppColors.red500 : AppColors.primary,
+                ),
+                const SizedBox(width: 6),
+                _SmallIconBtn(
+                  icon: task.isDisabled ? Icons.toggle_on_outlined : Icons.toggle_off_outlined,
+                  onTap: onToggleEnabled,
+                  color: task.isDisabled ? AppColors.primary : AppColors.slate400,
+                ),
+                const SizedBox(width: 6),
+                _SmallIconBtn(icon: Icons.edit_outlined, onTap: onEdit),
+                const SizedBox(width: 6),
+                _SmallIconBtn(icon: Icons.more_horiz, onTap: () => _showActionMenu(context)),
+              ],
             ),
           ],
         ),
@@ -933,6 +889,7 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
   bool _loadingFinalLog = false;
   int _finalLogAttempts = 0;
   double? _status;
+  bool _autoScroll = false;
 
   @override
   void initState() {
@@ -984,11 +941,13 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
         }
       }
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-        }
-      });
+      if (_autoScroll) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+          }
+        });
+      }
     } catch (_) {
       if (!mounted) {
         return;
@@ -1025,11 +984,13 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
       setState(() {
         _logs = historyLines;
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-        }
-      });
+      if (_autoScroll) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+          }
+        });
+      }
     } catch (_) {
       // 兜底保持实时页当前内容，避免影响已结束态展示
     }
@@ -1056,6 +1017,23 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
         title: Text(title),
         backgroundColor: const Color(0xFF1E1E1E),
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: Icon(
+              _autoScroll ? Icons.vertical_align_bottom : Icons.pause,
+              color: _autoScroll ? AppColors.primary : Colors.white70,
+            ),
+            tooltip: _autoScroll ? '自动滚动: 开' : '自动滚动: 关',
+            onPressed: () {
+              setState(() {
+                _autoScroll = !_autoScroll;
+              });
+              if (_autoScroll && _scrollController.hasClients) {
+                _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+              }
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -1073,17 +1051,27 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
                       style: const TextStyle(color: Color(0xFFD4D4D4)),
                     ),
                   )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(12),
-                    itemCount: _logs.length,
-                    itemBuilder: (_, index) => Text(
-                      _logs[index],
-                      style: const TextStyle(
-                        color: Color(0xFFD4D4D4),
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                        height: 1.6,
+                : Theme(
+                    data: Theme.of(context).copyWith(
+                      textSelectionTheme: TextSelectionThemeData(
+                        selectionColor: AppColors.primary.withAlpha(80),
+                        selectionHandleColor: AppColors.primary,
+                      ),
+                    ),
+                    child: Scrollbar(
+                      controller: _scrollController,
+                      child: SingleChildScrollView(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(12),
+                        child: SelectableText(
+                          _logs.join('\n'),
+                          style: const TextStyle(
+                            color: Color(0xFFD4D4D4),
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                            height: 1.6,
+                          ),
+                        ),
                       ),
                     ),
                   ),

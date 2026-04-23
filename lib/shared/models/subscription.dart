@@ -4,6 +4,7 @@ class Subscription {
   final String type;
   final String url;
   final String branch;
+  final String? subPath;
   final String schedule;
   final String whitelist;
   final String blacklist;
@@ -26,6 +27,7 @@ class Subscription {
     this.type = 'public-repo',
     this.url = '',
     this.branch = '',
+    this.subPath,
     this.schedule = '',
     this.whitelist = '',
     this.blacklist = '',
@@ -80,6 +82,7 @@ class Subscription {
       type: json['type']?.toString() ?? 'public-repo',
       url: json['url']?.toString() ?? '',
       branch: json['branch']?.toString() ?? '',
+      subPath: json['sub_path']?.toString(),
       schedule: json['schedule']?.toString() ?? '',
       whitelist: json['whitelist']?.toString() ?? '',
       blacklist: json['blacklist']?.toString() ?? '',
@@ -103,6 +106,7 @@ class Subscription {
     'type': normalizedType,
     'url': url,
     'branch': branch,
+    'sub_path': subPath ?? '',
     'schedule': schedule,
     'whitelist': whitelist,
     'blacklist': blacklist,

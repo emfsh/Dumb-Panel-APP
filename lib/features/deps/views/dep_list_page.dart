@@ -898,36 +898,19 @@ class _DepListPageState extends ConsumerState<DepListPage> {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: _loadPageData,
-                    icon: const Icon(Icons.refresh_rounded, size: 18),
-                    label: Text(state.loading ? '刷新中...' : '刷新'),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: _openMirrorDialog,
-                    icon: const Icon(Icons.language_rounded, size: 18),
-                    label: const Text('镜像源'),
-                  ),
-                  FilledButton.tonalIcon(
-                    onPressed: _selectedIds.isEmpty ? null : _handleBatchDelete,
-                    icon: const Icon(Icons.delete_sweep_outlined, size: 18),
-                    label: Text(
-                      _selectedIds.isEmpty
-                          ? '批量卸载'
-                          : '批量卸载 (${_selectedIds.length})',
-                    ),
-                  ),
-                ],
+            if (_selectedIds.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: FilledButton.tonalIcon(
+                  onPressed: _handleBatchDelete,
+                  icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+                  label: Text('批量卸载 (${_selectedIds.length})'),
+                  style: FilledButton.styleFrom(foregroundColor: AppColors.red500, minimumSize: const Size(double.infinity, 40)),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
+            ],
+            const SizedBox(height: 10),
             Expanded(
               child: RefreshIndicator(
                 color: AppColors.primary,
@@ -1065,8 +1048,8 @@ class _DepCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: isLight ? Colors.white : AppColors.slate900,
         borderRadius: BorderRadius.circular(12),
@@ -1075,13 +1058,18 @@ class _DepCard extends StatelessWidget {
         ),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Checkbox(
-            value: selected,
-            onChanged: (value) => onSelected(value ?? false),
+          SizedBox(
+            width: 24,
+            height: 24,
+            child: Checkbox(
+              value: selected,
+              onChanged: (value) => onSelected(value ?? false),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1091,100 +1079,63 @@ class _DepCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         dep.name,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (dep.version.isNotEmpty) ...[
-                      const SizedBox(width: 6),
+                    if (dep.version.isNotEmpty)
                       Text(
                         dep.version,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isLight
-                              ? AppColors.slate500
-                              : AppColors.slate400,
-                          fontFamily: 'monospace',
-                        ),
+                        style: TextStyle(fontSize: 10, color: isLight ? AppColors.slate500 : AppColors.slate400, fontFamily: 'monospace'),
                       ),
-                    ],
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isLight ? AppColors.slate500 : AppColors.slate400,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _statusBg(),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    dep.statusText,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: _statusFg(),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                const SizedBox(height: 3),
+                Row(
                   children: [
-                    OutlinedButton.icon(
-                      onPressed: onViewLog,
-                      icon: const Icon(Icons.terminal, size: 16),
-                      label: const Text('日志'),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(color: _statusBg(), borderRadius: BorderRadius.circular(4)),
+                      child: Text(dep.statusText, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _statusFg())),
                     ),
-                    if (dep.isBusy)
-                      OutlinedButton.icon(
-                        onPressed: onCancel,
-                        icon: const Icon(
-                          Icons.stop_circle_outlined,
-                          size: 16,
-                          color: AppColors.amber500,
-                        ),
-                        label: const Text('取消'),
-                      ),
-                    OutlinedButton.icon(
-                      onPressed: onReinstall,
-                      icon: const Icon(Icons.refresh, size: 16),
-                      label: const Text('重装'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: onDelete,
-                      icon: const Icon(
-                        Icons.delete_outline,
-                        size: 16,
-                        color: AppColors.red500,
-                      ),
-                      label: const Text('卸载'),
-                    ),
-                    FilledButton.tonalIcon(
-                      onPressed: onForceDelete,
-                      icon: const Icon(Icons.delete_forever_outlined, size: 16),
-                      label: const Text('强制卸载'),
-                      style: FilledButton.styleFrom(
-                        foregroundColor: AppColors.red500,
-                      ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(subtitle, style: TextStyle(fontSize: 10, color: isLight ? AppColors.slate400 : AppColors.slate500), maxLines: 1, overflow: TextOverflow.ellipsis),
                     ),
                   ],
                 ),
               ],
             ),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            onPressed: onViewLog,
+            icon: const Icon(Icons.terminal, size: 18),
+            tooltip: '日志',
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          ),
+          PopupMenuButton<String>(
+            onSelected: (action) {
+              switch (action) {
+                case 'cancel': onCancel?.call();
+                case 'reinstall': onReinstall?.call();
+                case 'delete': onDelete?.call();
+                case 'force_delete': onForceDelete?.call();
+              }
+            },
+            icon: const Icon(Icons.more_horiz, size: 18),
+            itemBuilder: (_) => [
+              if (dep.isBusy)
+                const PopupMenuItem(value: 'cancel', child: Text('取消安装')),
+              if (!dep.isBusy)
+                const PopupMenuItem(value: 'reinstall', child: Text('重新安装')),
+              if (!dep.isBusy)
+                const PopupMenuItem(value: 'delete', child: Text('卸载')),
+              if (!dep.isBusy)
+                PopupMenuItem(value: 'force_delete', child: Text('强制卸载', style: TextStyle(color: AppColors.red500))),
+            ],
           ),
         ],
       ),
