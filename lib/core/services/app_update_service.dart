@@ -10,6 +10,7 @@ import '../network/app_user_agent.dart';
 import '../theme/app_theme.dart';
 
 const _kGitHubRepo = 'linzixuanzz/Dumb-Panel-APP';
+const _kGitHubMirror = 'https://gh.301.ee/';
 
 class AppUpdateInfo {
   final String latestVersion;
@@ -56,7 +57,8 @@ class AppUpdateService {
         for (final asset in assets) {
           final name = asset['name']?.toString() ?? '';
           if (name.endsWith('.apk')) {
-            apkUrl = asset['browser_download_url']?.toString() ?? '';
+            final rawUrl = asset['browser_download_url']?.toString() ?? '';
+            apkUrl = rawUrl.isNotEmpty ? '$_kGitHubMirror$rawUrl' : '';
             break;
           }
         }
