@@ -52,7 +52,15 @@ class _PanelLogPageState extends State<PanelLogPage> {
       }
       setState(() {
         if (data is Map<String, dynamic>) {
-          _content = data['content']?.toString() ?? '';
+          final rawLogs = data['logs'];
+          if (rawLogs is List) {
+            _content = rawLogs
+                .map((item) => item.toString())
+                .where((line) => line.isNotEmpty)
+                .join('\n');
+          } else {
+            _content = data['content']?.toString() ?? '';
+          }
         } else {
           _content = data?.toString() ?? '';
         }

@@ -1207,12 +1207,13 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
   final ScrollController _scrollController = ScrollController();
   final _sseClient = SseClient();
   final _lines = <String>[];
+  final _historyReplayBuffer = <String>[];
   bool _loading = true;
   bool _done = false;
   bool _autoScroll = true;
   String _statusText = '连接中...';
-  int? _activeLogId;
   Timer? _pollTimer;
+  int _pollAttempts = 0;
 
   @override
   void initState() {
@@ -1229,43 +1230,13 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
   }
 
   Future<void> _init() async {
-    _pollTimer?.cancel();
     try {
       final resp = await DioClient.instance.dio.get(
-        ApiEndpoints.taskLatestLog(widget.taskId),
+        ApiEndpoints.taskLiveLogs(widget.taskId),
       );
       final data = extractData(resp.data);
       if (data is Map<String, dynamic>) {
-        final logId = (data['id'] as num?)?.toInt();
-        final content = data['content']?.toString() ?? '';
-        final status = (data['status'] as num?)?.toInt();
-        final isRunning = status == 2;
-
-        if (content.isNotEmpty) {
-          final lines = content.replaceAll('\r\n', '\n').split('\n');
-          if (lines.isNotEmpty && lines.last.isEmpty) lines.removeLast();
-          _lines
-            ..clear()
-            ..addAll(lines);
-        }
-
-        if (mounted) {
-          setState(() {
-            _loading = false;
-            _activeLogId = logId;
-            _done = !isRunning;
-            _statusText = _statusFromLogStatus(status, isRunning: isRunning);
-          });
-        }
-
-        if (isRunning && logId != null) {
-          _connectSSE(logId);
-          if (_autoScroll && _lines.isNotEmpty) {
-            _scrollToBottom();
-          }
-        } else if (!isRunning) {
-          _startPolling();
-        }
+        _applyLiveSnapshot(data, initial: true);
         return;
       }
     } catch (_) {}
@@ -1279,83 +1250,124 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
     _startPolling();
   }
 
-  void _startPolling() {
+  void _applyLiveSnapshot(
+    Map<String, dynamic> data, {
+    bool initial = false,
+  }) {
+    final rawLogs = data['logs'];
+    final logs = rawLogs is List
+        ? rawLogs
+            .map((item) => item.toString())
+            .where((line) => line.trim().isNotEmpty)
+            .toList()
+        : const <String>[];
+    final done = data['done'] == true;
+    final status = (data['status'] as num?)?.toDouble();
+    final isRunning = !done && status == 2;
+    final shouldKeepPolling = !isRunning && (logs.isEmpty || initial);
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _loading = false;
+      _lines
+        ..clear()
+        ..addAll(logs);
+      _done = done && !shouldKeepPolling;
+      _statusText = shouldKeepPolling
+          ? '等待日志...'
+          : _statusFromLiveTask(status, done: done);
+    });
+
+    if (_autoScroll && logs.isNotEmpty) {
+      _scrollToBottom();
+    }
+
+    if (isRunning) {
+      _pollTimer?.cancel();
+      _connectSSE(widget.taskId);
+      return;
+    }
+
+    if (shouldKeepPolling) {
+      _startPolling();
+      return;
+    }
+
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _pollLatestLog());
   }
 
-  Future<void> _pollLatestLog() async {
-    if (!mounted) return;
-    try {
-      final resp = await DioClient.instance.dio.get(
-        ApiEndpoints.taskLatestLog(widget.taskId),
-      );
-      final data = extractData(resp.data);
-      if (data is! Map<String, dynamic>) {
-        return;
-      }
-
-      final logId = (data['id'] as num?)?.toInt();
-      final content = data['content']?.toString() ?? '';
-      final status = (data['status'] as num?)?.toInt();
-      final isRunning = status == 2;
-      final lines = _splitLogLines(content);
-
+  void _startPolling() {
+    if (_pollTimer != null) {
+      return;
+    }
+    _pollAttempts = 0;
+    _pollTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
+      _pollAttempts++;
       if (!mounted) {
+        _pollTimer?.cancel();
+        _pollTimer = null;
         return;
       }
-
-      final shouldReplaceLines = logId != null && logId != _activeLogId;
-      setState(() {
-        _loading = false;
-        _activeLogId = logId ?? _activeLogId;
-        _done = !isRunning;
-        _statusText = _statusFromLogStatus(status, isRunning: isRunning);
-
-        if (shouldReplaceLines) {
-          _lines
-            ..clear()
-            ..addAll(lines);
-        } else if (lines.length > _lines.length) {
-          _lines
-            ..clear()
-            ..addAll(lines);
-        } else if (_lines.isEmpty && lines.isNotEmpty) {
-          _lines.addAll(lines);
+      try {
+        final resp = await DioClient.instance.dio.get(
+          ApiEndpoints.taskLiveLogs(widget.taskId),
+        );
+        final data = extractData(resp.data);
+        if (data is Map<String, dynamic>) {
+          _applyLiveSnapshot(data);
         }
-      });
+      } catch (_) {}
 
-      if (isRunning && logId != null) {
+      if (_pollAttempts >= 15 && mounted && _statusText == '等待日志...') {
         _pollTimer?.cancel();
-        _connectSSE(logId);
-        if (_autoScroll && _lines.isNotEmpty) {
-          _scrollToBottom();
-        }
+        _pollTimer = null;
+        setState(() {
+          _done = _lines.isNotEmpty;
+          _statusText = _lines.isEmpty ? '暂无日志' : '已完成';
+        });
       }
-    } catch (_) {}
+    });
   }
 
-  void _connectSSE(int logId) {
+  void _connectSSE(int taskId) {
     _sseClient.close();
     _pollTimer?.cancel();
-    _activeLogId = logId;
+    _pollTimer = null;
+    _historyReplayBuffer
+      ..clear()
+      ..addAll(_lines);
     _sseClient.connect(
-      path: ApiEndpoints.logStream(logId),
+      path: ApiEndpoints.logStream(taskId),
       autoReconnect: true,
       onEvent: (event) {
         if (!mounted) return;
         if (event.event == 'done') {
+          if (event.data == 'reconnect') {
+            setState(() {
+              _done = false;
+              _statusText = '运行中';
+            });
+            _historyReplayBuffer
+              ..clear()
+              ..addAll(_lines);
+            return;
+          }
           setState(() {
-            _done = true;
-            _statusText = event.data == 'finished' ? '已完成' : event.data;
+            _done = event.data == 'finished';
+            _statusText = _statusFromStreamDone(event.data);
           });
           return;
         }
         final newLines = event.data.replaceAll('\r\n', '\n').split('\n');
         newLines.removeWhere((l) => l.isEmpty);
         if (newLines.isEmpty) return;
+        final dedupedLines = _consumeReplayLines(newLines);
+        if (dedupedLines.isEmpty) return;
         setState(() {
-          _lines.addAll(newLines);
+          _lines.addAll(dedupedLines);
           _done = false;
           _statusText = '运行中';
         });
@@ -1363,48 +1375,72 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
       },
       onDone: () {
         if (!mounted) return;
-        final wasCompleted = _done;
-        setState(() {
-          if (!wasCompleted) {
-            _statusText = '连接结束';
-          }
-        });
+        if (_done) return;
+        setState(() => _statusText = '连接结束');
       },
       onError: (_) {
         if (!mounted) return;
-        setState(() {
-          if (!_done) {
-            _statusText = '连接错误';
-          }
-        });
         if (!_done) {
+          setState(() => _statusText = '连接错误');
+          _pollTimer?.cancel();
+          _pollTimer = null;
           _startPolling();
         }
       },
     );
   }
 
-  List<String> _splitLogLines(String content) {
-    final lines = content.replaceAll('\r\n', '\n').split('\n');
-    if (lines.isNotEmpty && lines.last.isEmpty) {
-      lines.removeLast();
+  List<String> _consumeReplayLines(List<String> incomingLines) {
+    if (_historyReplayBuffer.isEmpty) {
+      return incomingLines;
     }
-    return lines;
+
+    final result = <String>[];
+    for (final line in incomingLines) {
+      if (_historyReplayBuffer.isNotEmpty &&
+          line == _historyReplayBuffer.first) {
+        _historyReplayBuffer.removeAt(0);
+        continue;
+      }
+
+      _historyReplayBuffer.clear();
+      result.add(line);
+    }
+
+    return result;
   }
 
-  String _statusFromLogStatus(int? status, {required bool isRunning}) {
-    if (isRunning) {
+  String _statusFromLiveTask(double? status, {required bool done}) {
+    if (!done && status == 2) {
       return '运行中';
+    }
+    if (!done) {
+      return '等待日志...';
     }
     switch (status) {
       case 0:
-        return '已完成';
+        return '已禁用';
+      case 0.5:
+        return '排队中';
       case 1:
-        return '失败';
+        return '已启用';
       case 2:
-        return '运行中';
+        return '已完成';
       default:
         return _lines.isEmpty ? '等待日志...' : '已完成';
+    }
+  }
+
+  String _statusFromStreamDone(String value) {
+    switch (value) {
+      case 'finished':
+        return '已完成';
+      case 'timeout':
+        return '等待日志...';
+      case 'reconnect':
+        return '运行中';
+      default:
+        return value;
     }
   }
 
