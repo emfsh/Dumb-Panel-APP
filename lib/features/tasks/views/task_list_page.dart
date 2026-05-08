@@ -11,6 +11,7 @@ import '../../../core/network/sse_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/task.dart';
 import '../../../shared/utils/api_utils.dart';
+import '../../../shared/widgets/task_cron_list.dart';
 import '../providers/task_provider.dart';
 
 class TaskListPage extends ConsumerStatefulWidget {
@@ -414,39 +415,63 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
   }
 
   Future<void> _confirmDelete(Task task) async {
+    final scriptPath = _extractScriptPathFromCommand(task.command);
+    var deleteScript = false;
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('删除任务'),
-        content: Text('确定要删除「${task.name}」吗？'),
-        actions: [
-          Row(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('删除任务'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(dialogContext, false),
-                    child: const Text('取消'),
-                  ),
+              Text('确定要删除「${task.name}」吗？'),
+              if (scriptPath != null) ...[
+                const SizedBox(height: 14),
+                CheckboxListTile(
+                  value: deleteScript,
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text('同时删除关联脚本'),
+                  subtitle: Text(scriptPath),
+                  onChanged: (value) {
+                    setDialogState(() => deleteScript = value ?? false);
+                  },
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: FilledButton(
-                    onPressed: () => Navigator.pop(dialogContext, true),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.red500,
-                    ),
-                    child: const Text('删除'),
-                  ),
-                ),
-              ),
+              ],
             ],
           ),
-        ],
+          actions: [
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(dialogContext, false),
+                      child: const Text('取消'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: FilledButton(
+                      onPressed: () => Navigator.pop(dialogContext, true),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.red500,
+                      ),
+                      child: const Text('删除'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
     if (confirm != true) {
@@ -454,6 +479,18 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
     }
     try {
       await ref.read(taskProvider.notifier).deleteTask(task.id);
+      if (deleteScript && scriptPath != null) {
+        try {
+          await DioClient.instance.dio.delete(
+            ApiEndpoints.scripts,
+            queryParameters: {'path': scriptPath, 'type': 'file'},
+          );
+          _showMessage('任务和关联脚本已删除');
+        } catch (error) {
+          _showMessage('任务已删除，但脚本删除失败：${extractErrorMessage(error, '请稍后手动删除脚本')}');
+        }
+        return;
+      }
       _showMessage('任务已删除');
     } catch (error) {
       await _showActionError(error, '删除任务失败');
@@ -548,20 +585,18 @@ class _TaskCard extends StatelessWidget {
       case 'startup':
         return '开机运行';
       default:
-        return 'Cron';
+        return '常规定时';
     }
   }
 
-  String _scheduleText() {
-    if (task.taskType == 'cron') {
-      if (task.cronExpressions.length > 1) {
-        return task.cronExpressions.join('  |  ');
-      }
-      if (task.cronExpression.trim().isNotEmpty) {
-        return task.cronExpression;
-      }
+  List<String> _scheduleExpressions() {
+    if (task.cronExpressions.isNotEmpty) {
+      return task.cronExpressions;
     }
-    return _taskTypeLabel();
+    if (task.cronExpression.trim().isNotEmpty) {
+      return [task.cronExpression.trim()];
+    }
+    return const [];
   }
 
   String _bottomText() {
@@ -733,16 +768,20 @@ class _TaskCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 5),
                 Expanded(
-                  child: Text(
-                    _scheduleText(),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontFamily: 'monospace',
-                      color: isLight ? AppColors.slate500 : AppColors.slate400,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: task.taskType == 'cron'
+                      ? TaskCronList(
+                          expressions: _scheduleExpressions(),
+                          compact: true,
+                        )
+                      : Text(
+                          _taskTypeLabel(),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isLight
+                                ? AppColors.slate500
+                                : AppColors.slate400,
+                          ),
+                        ),
                 ),
               ],
             ),
@@ -791,6 +830,107 @@ class _TaskCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String? _extractScriptPathFromCommand(String command) {
+  final trimmed = command.trim();
+  if (trimmed.isEmpty) {
+    return null;
+  }
+
+  final tokens = _splitCommandTokens(trimmed);
+  if (tokens.isEmpty) {
+    return null;
+  }
+
+  bool hasSupportedExtension(String value) {
+    final lower = value.toLowerCase();
+    return lower.endsWith('.py') ||
+        lower.endsWith('.js') ||
+        lower.endsWith('.ts') ||
+        lower.endsWith('.sh') ||
+        lower.endsWith('.go');
+  }
+
+  String? joinCandidate(List<String> items) {
+    for (var count = items.length; count >= 1; count--) {
+      final candidate = items.take(count).join(' ').trim();
+      if (hasSupportedExtension(candidate)) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  switch (tokens.first) {
+    case 'task':
+    case 'desi':
+      final rest = tokens.sublist(1);
+      var idx = 0;
+      while (idx < rest.length) {
+        if (rest[idx] == '-m' && idx + 1 < rest.length) {
+          idx += 2;
+          continue;
+        }
+        if (rest[idx] == '-l') {
+          idx += 1;
+          continue;
+        }
+        break;
+      }
+      return joinCandidate(rest.sublist(idx));
+    case 'python':
+    case 'python3':
+    case 'node':
+    case 'ts-node':
+    case 'bash':
+    case 'go':
+      if (tokens.length <= 1) {
+        return null;
+      }
+      return joinCandidate(tokens.sublist(1));
+    default:
+      return null;
+  }
+}
+
+List<String> _splitCommandTokens(String command) {
+  final tokens = <String>[];
+  final buffer = StringBuffer();
+  String? quote;
+
+  for (final rune in command.runes) {
+    final char = String.fromCharCode(rune);
+    if (quote != null) {
+      if (char == quote) {
+        quote = null;
+      } else {
+        buffer.write(char);
+      }
+      continue;
+    }
+
+    if (char == '"' || char == "'") {
+      quote = char;
+      continue;
+    }
+
+    if (char.trim().isEmpty) {
+      if (buffer.isNotEmpty) {
+        tokens.add(buffer.toString());
+        buffer.clear();
+      }
+      continue;
+    }
+
+    buffer.write(char);
+  }
+
+  if (buffer.isNotEmpty) {
+    tokens.add(buffer.toString());
+  }
+
+  return tokens;
 }
 
 class _MetaChip extends StatelessWidget {
@@ -881,13 +1021,195 @@ class TaskLiveLogPage extends ConsumerStatefulWidget {
   ConsumerState<TaskLiveLogPage> createState() => _TaskLiveLogPageState();
 }
 
+class TaskDetailSheet extends StatelessWidget {
+  final Task task;
+
+  const TaskDetailSheet({super.key, required this.task});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isLight = theme.brightness == Brightness.light;
+    final labels = task.labelsForDisplay;
+    final scheduleExpressions = task.cronExpressions.isNotEmpty
+        ? task.cronExpressions
+        : (task.cronExpression.trim().isNotEmpty ? [task.cronExpression.trim()] : const <String>[]);
+
+    Widget infoTile(String label, Widget child, {bool expand = false}) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: isLight ? AppColors.slate100 : AppColors.slate800,
+            ),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (expand) child else DefaultTextStyle.merge(child: child),
+          ],
+        ),
+      );
+    }
+
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.78,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '任务详情',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                task.name,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      infoTile(
+                        '状态',
+                        _MetaChip(label: task.statusText, active: !task.isDisabled),
+                      ),
+                      infoTile(
+                        '任务类型',
+                        Text(
+                          task.taskType == 'manual'
+                              ? '手动运行'
+                              : task.taskType == 'startup'
+                                  ? '开机运行'
+                                  : '常规定时',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                      infoTile(
+                        '定时规则',
+                        task.taskType == 'cron'
+                            ? TaskCronList(expressions: scheduleExpressions)
+                            : Text(
+                                '不使用 Cron',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                        expand: true,
+                      ),
+                      infoTile(
+                        '执行命令',
+                        SelectableText(
+                          task.command,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            height: 1.5,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                        expand: true,
+                      ),
+                      infoTile(
+                        '标签',
+                        labels.isEmpty
+                            ? Text(
+                                '无',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              )
+                            : Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: labels
+                                    .map((label) => _MetaChip(label: label))
+                                    .toList(),
+                              ),
+                        expand: true,
+                      ),
+                      infoTile(
+                        '上次运行',
+                        Text(
+                          task.lastRunAt == null
+                              ? '-'
+                              : DateFormat('yyyy-MM-dd HH:mm:ss').format(task.lastRunAt!.toLocal()),
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                      infoTile(
+                        '下次运行',
+                        Text(
+                          task.nextRunAt == null
+                              ? '-'
+                              : DateFormat('yyyy-MM-dd HH:mm:ss').format(task.nextRunAt!.toLocal()),
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                      infoTile(
+                        '上次结果',
+                        Text(
+                          task.lastRunStatus == null
+                              ? '未运行'
+                              : task.lastRunStatus == 0
+                                  ? '成功'
+                                  : '失败',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: task.lastRunStatus == 1 ? AppColors.red500 : null,
+                          ),
+                        ),
+                      ),
+                      infoTile(
+                        '最近耗时',
+                        Text(
+                          task.lastRunningTime == null
+                              ? '-'
+                              : '${task.lastRunningTime!.toStringAsFixed(2)}s',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
   final ScrollController _scrollController = ScrollController();
   final _sseClient = SseClient();
   final _lines = <String>[];
   bool _loading = true;
   bool _done = false;
-  bool _autoScroll = false;
+  bool _autoScroll = true;
   String _statusText = '连接中...';
 
   @override
@@ -949,9 +1271,8 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
         );
         final data = extractData(resp.data);
         if (data is Map<String, dynamic> && data['id'] != null) {
-          final logId = (data['id'] as num).toInt();
-          final content = data['content']?.toString() ?? '';
-          final isRunning = data['status'] == 0 || data['status'] == null;
+      final content = data['content']?.toString() ?? '';
+      final isRunning = data['status'] == 0 || data['status'] == null;
 
           if (content.isNotEmpty) {
             final lines = content.replaceAll('\r\n', '\n').split('\n');
@@ -959,12 +1280,15 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
             if (mounted) setState(() => _lines.addAll(lines));
           }
 
-          if (isRunning) {
-            _connectSSE(logId);
-          } else if (mounted) {
-            setState(() { _done = true; _statusText = '已完成'; });
+        if (isRunning) {
+          _connectSSE(widget.taskId);
+          if (_autoScroll) {
+            _scrollToBottom();
           }
-          return;
+        } else if (mounted) {
+          setState(() { _done = true; _statusText = '已完成'; });
+        }
+        return;
         }
       } catch (_) {}
       _pollUntilLogReady();

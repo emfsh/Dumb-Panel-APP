@@ -503,6 +503,8 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
                           const SizedBox(height: 8),
                           _ActionBtn(icon: Icons.backup, title: '备份恢复', subtitle: '创建备份、恢复、管理备份文件', isLight: isLight, onTap: () => context.push('/backup')),
                           const SizedBox(height: 8),
+                          _ActionBtn(icon: Icons.article_outlined, title: '面板日志', subtitle: '查看面板运行日志，支持级别与关键字筛选', isLight: isLight, onTap: () => context.push('/panel-log')),
+                          const SizedBox(height: 8),
                           _ActionBtn(icon: Icons.restart_alt, title: '重启面板', subtitle: '重启面板服务，运行中任务将中断', isLight: isLight, onTap: _restart, danger: true),
                         ],
                       ),

@@ -19,6 +19,7 @@ import '../../features/deps/views/dep_list_page.dart';
 import '../../features/users/views/user_list_page.dart';
 import '../../features/security/views/security_page.dart';
 import '../../features/system/views/system_settings_page.dart';
+import '../../features/system/views/panel_log_page.dart';
 import '../../features/system/views/backup_page.dart';
 import '../../features/openapi/views/open_api_page.dart';
 import '../../features/app_lock/views/app_lock_settings_page.dart';
@@ -213,6 +214,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/system-settings',
         parentNavigatorKey: _rootNavigatorKey,
         builder: (_, state) => const SystemSettingsPage(),
+      ),
+      GoRoute(
+        path: '/panel-log',
+        parentNavigatorKey: _rootNavigatorKey,
+        builder: (_, state) => const PanelLogPage(),
       ),
       GoRoute(
         path: '/backup',

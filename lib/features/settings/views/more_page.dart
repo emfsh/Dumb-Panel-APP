@@ -30,18 +30,18 @@ class _MorePageState extends ConsumerState<MorePage> {
         if (info != null && info.hasUpdate && !silent) {
           AppUpdateService.showUpdateDialog(context, info);
         } else if (!silent) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('当前已是最新版本')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('当前已是最新版本')));
         }
       }
     } catch (_) {
       if (mounted) {
         setState(() => _checking = false);
         if (!silent) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('检查更新失败，请稍后重试')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('检查更新失败，请稍后重试')));
         }
       }
     }
@@ -197,6 +197,12 @@ class _MorePageState extends ConsumerState<MorePage> {
               onTap: () => context.push('/system-settings'),
             ),
             _SettingsItem(
+              icon: Icons.article_outlined,
+              title: '面板日志',
+              isLight: isLight,
+              onTap: () => context.push('/panel-log'),
+            ),
+            _SettingsItem(
               icon: Icons.api,
               title: 'Open API',
               isLight: isLight,
@@ -227,15 +233,15 @@ class _MorePageState extends ConsumerState<MorePage> {
                     ),
                   )
                 : (_updateInfo?.hasUpdate == true
-                    ? Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: AppColors.red500,
-                          shape: BoxShape.circle,
-                        ),
-                      )
-                    : null),
+                      ? Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: AppColors.red500,
+                            shape: BoxShape.circle,
+                          ),
+                        )
+                      : null),
             onTap: () => _checkUpdate(),
           ),
           _SettingsItem(
@@ -472,10 +478,7 @@ class _SettingsItem extends StatelessWidget {
                 ),
               ),
             ),
-            if (trailing != null) ...[
-              trailing!,
-              const SizedBox(width: 8),
-            ],
+            if (trailing != null) ...[trailing!, const SizedBox(width: 8)],
             Icon(
               Icons.chevron_right,
               size: 18,

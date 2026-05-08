@@ -81,6 +81,9 @@ class ApiEndpoints {
       '$baseApi/scripts/versions/$id/rollback';
   static const String scriptsRun = '$baseApi/scripts/run';
   static const String scriptsRunCode = '$baseApi/scripts/run-code';
+  static String scriptsRunLogs(String runId) => '$baseApi/scripts/run/$runId/logs';
+  static String scriptsRunStop(String runId) => '$baseApi/scripts/run/$runId/stop';
+  static String scriptsRunClear(String runId) => '$baseApi/scripts/run/$runId';
   static const String scriptsFormat = '$baseApi/scripts/format';
 
   // Envs

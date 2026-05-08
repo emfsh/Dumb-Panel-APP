@@ -213,4 +213,9 @@ class SecureStorage {
     panels.removeWhere((p) => p.url == url);
     await savePanels(panels);
   }
+
+  static Future<void> writeValue(String key, String value) =>
+      _storage.write(key: key, value: value);
+
+  static Future<String?> readValue(String key) => _storage.read(key: key);
 }

@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -32,7 +34,7 @@ enum _ScriptEntryAction {
   createDirectoryHere,
 }
 
-enum _ScriptViewerAction { format, versions, addToTask }
+enum _ScriptViewerAction { format, versions, addToTask, debug }
 
 const _stateUnset = Object();
 
@@ -101,6 +103,7 @@ class ScriptVersionRecord {
 class ScriptState {
   final List<ScriptFile> tree;
   final bool loading;
+  final String keyword;
   final String? selectedPath;
   final String content;
   final bool isBinary;
@@ -110,6 +113,7 @@ class ScriptState {
   const ScriptState({
     this.tree = const [],
     this.loading = false,
+    this.keyword = '',
     this.selectedPath,
     this.content = '',
     this.isBinary = false,
@@ -120,6 +124,7 @@ class ScriptState {
   ScriptState copyWith({
     List<ScriptFile>? tree,
     bool? loading,
+    String? keyword,
     Object? selectedPath = _stateUnset,
     String? content,
     bool? isBinary,
@@ -129,6 +134,7 @@ class ScriptState {
     return ScriptState(
       tree: tree ?? this.tree,
       loading: loading ?? this.loading,
+      keyword: keyword ?? this.keyword,
       selectedPath: identical(selectedPath, _stateUnset)
           ? this.selectedPath
           : selectedPath as String?,
@@ -142,6 +148,10 @@ class ScriptState {
 
 class ScriptNotifier extends StateNotifier<ScriptState> {
   ScriptNotifier() : super(const ScriptState());
+
+  void setKeyword(String keyword) {
+    state = state.copyWith(keyword: keyword);
+  }
 
   Future<void> loadTree() async {
     state = state.copyWith(loading: true);
@@ -368,10 +378,18 @@ class ScriptListPage extends ConsumerStatefulWidget {
 }
 
 class _ScriptListPageState extends ConsumerState<ScriptListPage> {
+  final _searchController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     Future.microtask(() => ref.read(scriptProvider.notifier).loadTree());
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   void _showMessage(String message) {
@@ -383,12 +401,44 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  String _extractScriptError(dynamic error, String fallback) =>
+      extractScriptSaveErrorMessage(error, fallback);
+
   Future<void> _openScript(String path) async {
     await ref.read(scriptProvider.notifier).loadContent(path);
     if (!mounted) {
       return;
     }
     context.push('/scripts/view', extra: path);
+  }
+
+  List<ScriptFile> _filterTree(List<ScriptFile> nodes, String keyword) {
+    final query = keyword.trim().toLowerCase();
+    if (query.isEmpty) {
+      return nodes;
+    }
+
+    List<ScriptFile> visit(List<ScriptFile> items) {
+      final result = <ScriptFile>[];
+      for (final item in items) {
+        final children = visit(item.children);
+        final matched = item.name.toLowerCase().contains(query) ||
+            item.path.toLowerCase().contains(query);
+        if (matched || children.isNotEmpty) {
+          result.add(
+            ScriptFile(
+              name: item.name,
+              path: item.path,
+              isDirectory: item.isDirectory,
+              children: children,
+            ),
+          );
+        }
+      }
+      return result;
+    }
+
+    return visit(nodes);
   }
 
   TaskFormPrefill _taskPrefillFromScriptPath(String path) {
@@ -431,6 +481,7 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(scriptProvider);
     final isLight = Theme.of(context).brightness == Brightness.light;
+    final visibleTree = _filterTree(state.tree, state.keyword);
 
     return Scaffold(
       body: Padding(
@@ -519,6 +570,35 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
               ),
             ),
             const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: '搜索脚本名称或路径...',
+                  prefixIcon: const Icon(
+                    Icons.search,
+                    size: 18,
+                    color: AppColors.slate400,
+                  ),
+                  suffixIcon: _searchController.text.trim().isEmpty
+                      ? null
+                      : IconButton(
+                          onPressed: () {
+                            _searchController.clear();
+                            ref.read(scriptProvider.notifier).setKeyword('');
+                            setState(() {});
+                          },
+                          icon: const Icon(Icons.clear, size: 18),
+                        ),
+                ),
+                onChanged: (value) {
+                  ref.read(scriptProvider.notifier).setKeyword(value);
+                  setState(() {});
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
             Expanded(
               child: state.loading
                   ? const Center(
@@ -526,7 +606,7 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
                         color: AppColors.primary,
                       ),
                     )
-                  : state.tree.isEmpty
+                  : visibleTree.isEmpty
                   ? _buildEmpty(state)
                   : RefreshIndicator(
                       color: AppColors.primary,
@@ -534,7 +614,7 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
                           ref.read(scriptProvider.notifier).loadTree(),
                       child: ListView(
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                        children: state.tree
+                        children: visibleTree
                             .map(
                               (file) => _FileTreeItem(
                                 file: file,
@@ -1138,16 +1218,14 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
                       }
                       await _maybePromptAddToTask(paths.first);
                     }
-                  } catch (error) {
-                    if (!mounted) {
-                      return;
-                    }
-                    messenger.showSnackBar(
-                      SnackBar(
-                        content: Text(_extractRequestError(error, '上传失败')),
-                      ),
-                    );
-                  }
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        messenger.showSnackBar(
+          SnackBar(content: Text(_extractScriptError(error, '上传失败'))),
+        );
+      }
                 },
                 child: const Text('上传'),
               ),
@@ -1284,6 +1362,7 @@ class _ScriptViewPageState extends ConsumerState<ScriptViewPage> {
   late final FocusNode _contentFocusNode;
   final ScrollController _contentScrollController = ScrollController();
   bool _editing = false;
+  bool _debugRunning = false;
   String _lastSearchQuery = '';
   Color? _editorBackgroundColor;
   bool _searchHighlightActive = false;
@@ -1316,6 +1395,9 @@ class _ScriptViewPageState extends ConsumerState<ScriptViewPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  String _extractScriptError(dynamic error, String fallback) =>
+      extractScriptSaveErrorMessage(error, fallback);
+
   TaskFormPrefill _taskPrefill() {
     final fileName = widget.path.split('/').last;
     final taskName = fileName.replaceFirst(RegExp(r'\.[^/.]+$'), '');
@@ -1333,7 +1415,7 @@ class _ScriptViewPageState extends ConsumerState<ScriptViewPage> {
       setState(() => _editing = false);
       _showMessage('保存成功');
     } catch (error) {
-      _showMessage(_extractRequestError(error, '保存失败'));
+      _showMessage(_extractScriptError(error, '保存失败'));
     }
   }
 
@@ -1368,6 +1450,53 @@ class _ScriptViewPageState extends ConsumerState<ScriptViewPage> {
       showDragHandle: true,
       builder: (context) => _ScriptVersionSheet(path: widget.path),
     );
+  }
+
+  Future<void> _debugRun() async {
+    if (_debugRunning) {
+      return;
+    }
+
+    if (_editing) {
+      await _save();
+    }
+
+    setState(() => _debugRunning = true);
+    try {
+      final resp = await DioClient.instance.dio.post(
+        ApiEndpoints.scriptsRun,
+        data: {'path': widget.path},
+      );
+      final raw = resp.data;
+      String? runId;
+      if (raw is Map && raw['run_id'] != null) {
+        runId = raw['run_id'].toString();
+      } else if (raw is Map && raw['data'] is Map && raw['data']['run_id'] != null) {
+        runId = raw['data']['run_id'].toString();
+      }
+      if (runId == null || runId.isEmpty) {
+        throw StateError('调试任务已启动，但未返回运行 ID');
+      }
+
+      if (!mounted) {
+        return;
+      }
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (context) => _ScriptDebugRunSheet(
+          path: widget.path,
+          runId: runId!,
+        ),
+      );
+    } catch (error) {
+      _showMessage(_extractScriptError(error, '调试运行失败'));
+    } finally {
+      if (mounted) {
+        setState(() => _debugRunning = false);
+      }
+    }
   }
 
   Future<void> _loadEditorAppearance() async {
@@ -1598,6 +1727,9 @@ class _ScriptViewPageState extends ConsumerState<ScriptViewPage> {
         }
         await context.push('/tasks/new', extra: _taskPrefill());
         return;
+      case _ScriptViewerAction.debug:
+        await _debugRun();
+        return;
     }
   }
 
@@ -1654,7 +1786,27 @@ class _ScriptViewPageState extends ConsumerState<ScriptViewPage> {
                     title: Text('版本历史'),
                   ),
                 ),
+                PopupMenuItem(
+                  value: _ScriptViewerAction.debug,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.play_circle_outline),
+                    title: Text('调试运行'),
+                  ),
+                ),
               ],
+            ),
+          if (!state.isBinary)
+            IconButton(
+              onPressed: _debugRunning ? null : _debugRun,
+              icon: _debugRunning
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.play_arrow_rounded),
+              tooltip: '调试运行',
             ),
           if (!state.isBinary)
             IconButton(
@@ -2041,4 +2193,254 @@ String? _detectFormatterLanguage(String path) {
 }
 
 String _extractRequestError(dynamic error, String fallback) =>
-    extractErrorMessage(error, fallback);
+    extractScriptSaveErrorMessage(error, fallback);
+
+class _ScriptDebugRunSheet extends StatefulWidget {
+  final String path;
+  final String runId;
+
+  const _ScriptDebugRunSheet({
+    required this.path,
+    required this.runId,
+  });
+
+  @override
+  State<_ScriptDebugRunSheet> createState() => _ScriptDebugRunSheetState();
+}
+
+class _ScriptDebugRunSheetState extends State<_ScriptDebugRunSheet> {
+  final ScrollController _scrollController = ScrollController();
+  final List<String> _logs = [];
+  bool _loading = true;
+  bool _done = false;
+  bool _autoScroll = true;
+  String _statusText = '启动中...';
+  Timer? _pollTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLogs();
+    _pollTimer = Timer.periodic(const Duration(seconds: 1), (_) => _loadLogs());
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadLogs() async {
+    try {
+      final resp = await DioClient.instance.dio.get(
+        ApiEndpoints.scriptsRunLogs(widget.runId),
+      );
+      final data = extractData(resp.data);
+      if (data is! Map) {
+        return;
+      }
+
+      final rawLogs = data['logs'];
+      final nextLogs = rawLogs is List
+          ? rawLogs.map((item) => item.toString()).where((item) => item.trim().isNotEmpty).toList()
+          : const <String>[];
+      final done = data['done'] == true;
+      final exitCode = data['exit_code'];
+      final status = data['status']?.toString() ?? '';
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _logs
+          ..clear()
+          ..addAll(nextLogs);
+        _done = done;
+        _loading = false;
+        _statusText = _buildStatusText(status, exitCode, done);
+      });
+
+      if (_autoScroll) {
+        _scrollToBottom();
+      }
+
+      if (done) {
+        _pollTimer?.cancel();
+      }
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _statusText = '日志读取失败';
+      });
+    }
+  }
+
+  String _buildStatusText(String status, dynamic exitCode, bool done) {
+    if (!done) {
+      return '运行中...';
+    }
+    if (status == 'success') {
+      return '执行成功';
+    }
+    if (status == 'stopped') {
+      return '已停止';
+    }
+    if (exitCode is num && exitCode == 0) {
+      return '执行成功';
+    }
+    return '执行失败';
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 120),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  Future<void> _stopRun() async {
+    try {
+      await DioClient.instance.dio.put(ApiEndpoints.scriptsRunStop(widget.runId));
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _done = true;
+        _statusText = '已停止';
+      });
+      _pollTimer?.cancel();
+      await _loadLogs();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(extractScriptSaveErrorMessage(error, '停止调试失败'))),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.8,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '脚本调试',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                widget.path,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _statusText,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _logs.isEmpty
+                        ? null
+                        : () async {
+                            await Clipboard.setData(
+                              ClipboardData(text: _logs.join('\n')),
+                            );
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('已复制调试日志')),
+                            );
+                          },
+                    icon: const Icon(Icons.copy_all_outlined),
+                  ),
+                  IconButton(
+                    onPressed: () {
+                      setState(() => _autoScroll = !_autoScroll);
+                      if (_autoScroll) {
+                        _scrollToBottom();
+                      }
+                    },
+                    icon: Icon(
+                      _autoScroll
+                          ? Icons.vertical_align_bottom
+                          : Icons.pause_circle_outline,
+                    ),
+                  ),
+                  if (!_done)
+                    IconButton(
+                      onPressed: _stopRun,
+                      icon: const Icon(Icons.stop_circle_outlined),
+                    ),
+                ],
+              ),
+              Expanded(
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.termBg,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: _loading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            color: AppColors.primary,
+                          ),
+                        )
+                      : _logs.isEmpty
+                          ? const Center(
+                              child: Text(
+                                '等待调试输出...',
+                                style: TextStyle(color: AppColors.termText),
+                              ),
+                            )
+                          : Scrollbar(
+                              controller: _scrollController,
+                              child: SingleChildScrollView(
+                                controller: _scrollController,
+                                child: SelectableText(
+                                  _logs.join('\n'),
+                                  style: const TextStyle(
+                                    color: AppColors.termText,
+                                    fontFamily: 'monospace',
+                                    fontSize: 12,
+                                    height: 1.55,
+                                  ),
+                                ),
+                              ),
+                            ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

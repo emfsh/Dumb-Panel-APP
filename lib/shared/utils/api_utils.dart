@@ -60,6 +60,37 @@ String extractErrorMessage(dynamic error, String fallback) {
   return fallback;
 }
 
+String extractScriptSaveErrorMessage(dynamic error, String fallback) {
+  final raw = extractErrorMessage(error, fallback).trim();
+  if (raw.isEmpty) {
+    return fallback;
+  }
+
+  if (raw.contains('当前路径是目录')) {
+    return '当前选中的是目录，不是可编辑脚本文件';
+  }
+  if (raw.contains('文件不存在')) {
+    return '脚本不存在，可能已被删除、重命名或移动';
+  }
+  if (raw.contains('不允许路径穿越') ||
+      raw.contains('检测到路径穿越') ||
+      raw.contains('路径包含非法字符')) {
+    return '脚本路径无效，请刷新脚本树后重试';
+  }
+  if (raw.contains('二进制') || raw.contains('binary')) {
+    return '当前文件是二进制内容，暂不支持在线保存';
+  }
+  if (raw.contains('写入文件失败') || raw.contains('创建目标目录失败')) {
+    return '$raw，请检查面板数据目录挂载和写入权限';
+  }
+  if (raw.contains('ERR_REQUIRE_ESM') ||
+      (raw.contains('ES Module') && raw.contains('require()'))) {
+    return '依赖已安装，但当前模块是 ESM 格式，脚本仍在使用 require() 加载，请改用 import() 或安装兼容旧写法的版本';
+  }
+
+  return raw;
+}
+
 /// 安全转 int
 int? _toInt(dynamic v) {
   if (v == null) return null;

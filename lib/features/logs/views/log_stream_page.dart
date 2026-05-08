@@ -22,7 +22,7 @@ class _LogStreamPageState extends State<LogStreamPage> {
 
   bool _loading = true;
   bool _done = false;
-  bool _autoScroll = false;
+  bool _autoScroll = true;
   int? _taskId;
   String _status = '加载中...';
 
@@ -68,6 +68,9 @@ class _LogStreamPageState extends State<LogStreamPage> {
         _loading = false;
         _status = log.isRunning ? '连接中...' : log.statusText;
       });
+      if (_autoScroll && historyLines.isNotEmpty) {
+        _scrollToBottom();
+      }
 
       if (log.isRunning) {
         _connect();

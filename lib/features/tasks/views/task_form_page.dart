@@ -521,6 +521,3 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
     );
   }
 }
-
-String _extractTaskSaveError(dynamic error, String fallback) =>
-    extractErrorMessage(error, fallback);
