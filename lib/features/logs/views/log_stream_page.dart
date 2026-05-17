@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/task_log.dart';
 import '../../../shared/utils/api_utils.dart';
 import '../../../shared/utils/ansi_text.dart';
+import '../../../shared/utils/log_background.dart';
 
 class LogStreamPage extends StatefulWidget {
   final int logId;
@@ -26,11 +27,21 @@ class _LogStreamPageState extends State<LogStreamPage> {
   bool _autoScroll = true;
   int? _taskId;
   String _status = '加载中...';
+  Color? _logBackgroundColor;
 
   @override
   void initState() {
     super.initState();
+    _loadAppearance();
     _loadLog();
+  }
+
+  Future<void> _loadAppearance() async {
+    final color = await loadPanelLogBackgroundColor();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _logBackgroundColor = color);
   }
 
   Future<void> _loadLog() async {
@@ -205,7 +216,7 @@ class _LogStreamPageState extends State<LogStreamPage> {
         ],
       ),
       body: Container(
-        color: AppColors.termBg,
+        color: _logBackgroundColor ?? AppColors.termBg,
         child: _loading && _lines.isEmpty
             ? const Center(child: CircularProgressIndicator())
             : _lines.isEmpty

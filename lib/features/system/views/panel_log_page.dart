@@ -6,6 +6,7 @@ import '../../../core/network/dio_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/utils/api_utils.dart';
 import '../../../shared/utils/ansi_text.dart';
+import '../../../shared/utils/log_background.dart';
 
 class PanelLogPage extends StatefulWidget {
   const PanelLogPage({super.key});
@@ -21,6 +22,7 @@ class _PanelLogPageState extends State<PanelLogPage> {
   bool _loading = true;
   String _selectedLevel = '';
   String _content = '';
+  Color? _logBackgroundColor;
 
   @override
   void initState() {
@@ -38,16 +40,19 @@ class _PanelLogPageState extends State<PanelLogPage> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final resp = await DioClient.instance.dio.get(
-        ApiEndpoints.panelLog,
-        queryParameters: {
-          if (_selectedLevel.trim().isNotEmpty) 'level': _selectedLevel.trim(),
-          if (_keywordController.text.trim().isNotEmpty)
-            'keyword': _keywordController.text.trim(),
-          'lines': int.tryParse(_linesController.text.trim()) ?? 300,
-        },
-      );
-      final data = extractData(resp.data);
+      final responses = await Future.wait([
+        DioClient.instance.dio.get(
+          ApiEndpoints.panelLog,
+          queryParameters: {
+            if (_selectedLevel.trim().isNotEmpty) 'level': _selectedLevel.trim(),
+            if (_keywordController.text.trim().isNotEmpty)
+              'keyword': _keywordController.text.trim(),
+            'lines': int.tryParse(_linesController.text.trim()) ?? 300,
+          },
+        ),
+        loadPanelLogBackgroundColor(),
+      ]);
+      final data = extractData(responses[0].data);
       if (!mounted) {
         return;
       }
@@ -65,6 +70,7 @@ class _PanelLogPageState extends State<PanelLogPage> {
         } else {
           _content = data?.toString() ?? '';
         }
+        _logBackgroundColor = responses[1] as Color?;
         _loading = false;
       });
     } catch (error) {
@@ -169,7 +175,7 @@ class _PanelLogPageState extends State<PanelLogPage> {
             child: Container(
               margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               decoration: BoxDecoration(
-                color: AppColors.termBg,
+                color: _logBackgroundColor ?? AppColors.termBg,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: isLight ? AppColors.slate200 : AppColors.slate800,

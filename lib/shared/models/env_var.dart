@@ -24,6 +24,7 @@ class EnvVar {
   });
 
   bool get isPinned => sortOrder == 1;
+  List<String> get groups => _splitEnvGroups(group);
 
   factory EnvVar.fromJson(Map<String, dynamic> json) {
     return EnvVar(
@@ -54,4 +55,12 @@ int _int(dynamic v) => (v is num) ? v.toInt() : 0;
 DateTime? _date(dynamic v) {
   if (v is String && v.isNotEmpty) return DateTime.tryParse(v);
   return null;
+}
+
+List<String> _splitEnvGroups(String raw) {
+  return raw
+      .split(',')
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList();
 }

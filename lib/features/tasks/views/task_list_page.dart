@@ -40,6 +40,7 @@ const _taskStatusFilters = [
 class _TaskListPageState extends ConsumerState<TaskListPage> {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
+  final Set<String> _collapsedGroups = <String>{};
   Timer? _debounce;
 
   @override
@@ -185,6 +186,7 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
     final state = ref.watch(taskProvider);
     final theme = Theme.of(context);
     final isLight = theme.brightness == Brightness.light;
+    final groupedTasks = _groupTasks(state.tasks);
 
     return Scaffold(
       body: Padding(
@@ -369,23 +371,9 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                         controller: _scrollController,
                         physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                        itemCount: state.tasks.length,
-                        itemBuilder: (_, index) {
-                          final task = state.tasks[index];
-                          return _TaskCard(
-                            task: task,
-                            isLight: isLight,
-                            onTap: () => _openLatestLog(task),
-                            onRun: () => _runTask(task),
-                            onStop: () => _stopTask(task),
-                            onToggleEnabled: () => _toggleTaskEnabled(task),
-                            onCopy: () => _copyTask(task),
-                            onTogglePinned: () => _togglePinned(task),
-                            onEdit: () =>
-                                context.push('/tasks/edit', extra: task),
-                            onDelete: () => _confirmDelete(task),
-                          );
-                        },
+                        children: groupedTasks
+                            .map((group) => _buildTaskGroup(group, isLight))
+                            .toList(),
                       ),
               ),
             ),
@@ -412,6 +400,119 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
           ),
         ],
       ),
+    );
+  }
+
+  List<_TaskGroup> _groupTasks(List<Task> tasks) {
+    final groups = <_TaskGroup>[];
+    final map = <String, _TaskGroup>{};
+
+    for (final task in tasks) {
+      final groupName = task.groupName?.trim();
+      final key = (groupName == null || groupName.isEmpty)
+          ? ''
+          : groupName;
+      final title = key.isEmpty ? '未分组' : key;
+      final entry = map.putIfAbsent(
+        key,
+        () {
+          final created = _TaskGroup(key: key, title: title);
+          groups.add(created);
+          return created;
+        },
+      );
+      entry.tasks.add(task);
+    }
+
+    return groups;
+  }
+
+  Widget _buildTaskGroup(_TaskGroup group, bool isLight) {
+    final collapsed = _collapsedGroups.contains(group.key);
+    final enabledCount = group.tasks.where((task) => task.isEnabled).length;
+    final runningCount = group.tasks.where((task) => task.isRunning).length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          decoration: BoxDecoration(
+            color: isLight ? Colors.white : AppColors.slate900,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isLight ? AppColors.slate200 : AppColors.slate800,
+            ),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () {
+              setState(() {
+                if (collapsed) {
+                  _collapsedGroups.remove(group.key);
+                } else {
+                  _collapsedGroups.add(group.key);
+                }
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  Icon(
+                    collapsed ? Icons.chevron_right : Icons.expand_more,
+                    size: 20,
+                    color: AppColors.slate400,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      group.title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${group.tasks.length} 条',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  if (runningCount > 0)
+                    _MetaChip(
+                      label: '$runningCount 运行中',
+                      active: true,
+                    )
+                  else
+                    _MetaChip(
+                      label: '$enabledCount 已启用',
+                      active: enabledCount > 0,
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (!collapsed)
+          ...group.tasks.map(
+            (task) => _TaskCard(
+              task: task,
+              isLight: isLight,
+              onTap: () => _openLatestLog(task),
+              onRun: () => _runTask(task),
+              onStop: () => _stopTask(task),
+              onToggleEnabled: () => _toggleTaskEnabled(task),
+              onCopy: () => _copyTask(task),
+              onTogglePinned: () => _togglePinned(task),
+              onEdit: () => context.push('/tasks/edit', extra: task),
+              onDelete: () => _confirmDelete(task),
+            ),
+          ),
+      ],
     );
   }
 
@@ -698,7 +799,7 @@ class _TaskCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final dotColor = _dotColor();
     final borderColor = isLight ? AppColors.slate200 : AppColors.slate800;
-    final labels = task.labelsForDisplay;
+    final labels = task.userLabelsForDisplay;
     final hasFailure = task.lastRunStatus == 1;
 
     return GestureDetector(
@@ -831,6 +932,14 @@ class _TaskCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TaskGroup {
+  final String key;
+  final String title;
+  final List<Task> tasks = <Task>[];
+
+  _TaskGroup({required this.key, required this.title});
 }
 
 String? _extractScriptPathFromCommand(String command) {

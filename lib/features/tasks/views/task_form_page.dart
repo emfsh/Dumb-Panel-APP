@@ -71,6 +71,7 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
   late final TextEditingController _taskBeforeC;
   late final TextEditingController _taskAfterC;
   late final TextEditingController _labelC;
+  late final TextEditingController _groupC;
 
   bool _saving = false;
   bool _loadingChannels = false;
@@ -106,6 +107,7 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
     _taskBeforeC = TextEditingController(text: task?.taskBefore ?? '');
     _taskAfterC = TextEditingController(text: task?.taskAfter ?? '');
     _labelC = TextEditingController();
+    _groupC = TextEditingController(text: task?.groupName ?? '');
 
     _taskType = task?.taskType ?? prefill?.taskType ?? 'cron';
     _notifyOnFailure = task?.notifyOnFailure ?? true;
@@ -122,7 +124,7 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
   @override
   void dispose() {
     for (final c in [_nameC, _commandC, _cronC, _timeoutC, _randomDelayC,
-        _retriesC, _retryIntervalC, _dependsOnC, _taskBeforeC, _taskAfterC, _labelC]) {
+        _retriesC, _retryIntervalC, _dependsOnC, _taskBeforeC, _taskAfterC, _labelC, _groupC]) {
       c.dispose();
     }
     super.dispose();
@@ -172,6 +174,14 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
       return;
     }
 
+    final normalizedLabels = <String>[
+      ..._labels.where((label) => !Task.isGroupLabel(label)),
+    ];
+    final groupName = _groupC.text.trim();
+    if (groupName.isNotEmpty) {
+      normalizedLabels.add(Task.toGroupLabel(groupName));
+    }
+
     final data = <String, dynamic>{
       'name': _nameC.text.trim(),
       'command': _commandC.text.trim(),
@@ -184,7 +194,7 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
       'notify_on_failure': _notifyOnFailure,
       'notify_on_success': _notifyOnSuccess,
       'notification_channel_id': _notificationChannelId,
-      'labels': _labels,
+      'labels': normalizedLabels,
       'depends_on': int.tryParse(_dependsOnC.text.trim()),
       'task_before': _taskBeforeC.text.trim(),
       'task_after': _taskAfterC.text.trim(),
@@ -325,6 +335,14 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
                   ),
                 ],
                 if (_labels.isNotEmpty || true) ...[
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _groupC,
+                    decoration: const InputDecoration(
+                      labelText: '任务分组',
+                      hintText: '例如 中国联通 / 京东 / 日常',
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 6,

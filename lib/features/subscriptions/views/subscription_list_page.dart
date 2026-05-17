@@ -11,6 +11,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/subscription.dart';
 import '../../../shared/utils/api_utils.dart';
 import '../../../shared/utils/ansi_text.dart';
+import '../../../shared/utils/log_background.dart';
 
 // ── Provider ──
 
@@ -1073,11 +1074,15 @@ class _SubscriptionLogsPageState extends ConsumerState<SubscriptionLogsPage> {
   bool _loading = true;
   int _page = 1;
   int _total = 0;
+  Color? _logBackgroundColor;
 
   @override
   void initState() {
     super.initState();
-    Future.microtask(_load);
+    Future.microtask(() async {
+      _logBackgroundColor = await loadPanelLogBackgroundColor();
+      await _load();
+    });
   }
 
   Future<void> _load({int? page}) async {
@@ -1129,7 +1134,8 @@ class _SubscriptionLogsPageState extends ConsumerState<SubscriptionLogsPage> {
                   child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: isLight ? Colors.white : const Color(0xFF1E1E1E),
+                      color: _logBackgroundColor ??
+                          (isLight ? Colors.white : const Color(0xFF1E1E1E)),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: isLight
@@ -1373,10 +1379,17 @@ class _SubscriptionPullStreamPageState
   final _scrollController = ScrollController();
   bool _done = false;
   String? _statusMessage;
+  Color? _logBackgroundColor;
 
   @override
   void initState() {
     super.initState();
+    Future.microtask(() async {
+      final color = await loadPanelLogBackgroundColor();
+      if (mounted) {
+        setState(() => _logBackgroundColor = color);
+      }
+    });
     _connectStream();
   }
 
@@ -1431,13 +1444,15 @@ class _SubscriptionPullStreamPageState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: _logBackgroundColor ?? Colors.white,
       appBar: AppBar(
         title: const Text('拉取日志'),
-        backgroundColor: Colors.white,
+        backgroundColor: _logBackgroundColor ?? Colors.white,
         foregroundColor: AppColors.slate900,
       ),
-      body: Column(
+      body: Container(
+        color: _logBackgroundColor ?? AppColors.termBg,
+        child: Column(
         children: [
           Expanded(
             child: _logs.isEmpty && _statusMessage != null
@@ -1479,6 +1494,7 @@ class _SubscriptionPullStreamPageState
               ),
             ),
         ],
+        ),
       ),
     );
   }

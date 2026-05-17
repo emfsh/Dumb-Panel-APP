@@ -1,4 +1,6 @@
 class Task {
+  static const String groupLabelPrefix = '分组:';
+
   final int id;
   final String name;
   final String command;
@@ -79,6 +81,28 @@ class Task {
 
   List<String> get labelsForDisplay =>
       displayLabels.isNotEmpty ? displayLabels : labelList;
+
+  static bool isGroupLabel(String label) =>
+      label.trim().startsWith(groupLabelPrefix);
+
+  static String toGroupLabel(String group) =>
+      '$groupLabelPrefix${group.trim()}';
+
+  String? get groupName {
+    for (final label in labelsForDisplay) {
+      final trimmed = label.trim();
+      if (isGroupLabel(trimmed)) {
+        final group = trimmed.substring(groupLabelPrefix.length).trim();
+        if (group.isNotEmpty) {
+          return group;
+        }
+      }
+    }
+    return null;
+  }
+
+  List<String> get userLabelsForDisplay =>
+      labelsForDisplay.where((label) => !isGroupLabel(label)).toList();
 
   factory Task.fromJson(Map<String, dynamic> json) {
     return Task(

@@ -195,10 +195,16 @@ class EnvListNotifier extends StateNotifier<EnvListState> {
     String name,
     String value, {
     String remarks = '',
+    String group = '',
   }) async {
     await DioClient.instance.dio.put(
       ApiEndpoints.envById(id),
-      data: {'name': name, 'value': value, 'remarks': remarks},
+      data: {
+        'name': name,
+        'value': value,
+        'remarks': remarks,
+        'group': group,
+      },
     );
     await load();
   }
@@ -217,6 +223,72 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
   Timer? _debounce;
 
   bool _selectionMode = false;
+
+  Widget _buildGroupAutocomplete({
+    required TextEditingController controller,
+    required List<String> options,
+  }) {
+    return Autocomplete<String>(
+      optionsBuilder: (textEditingValue) {
+        final keyword = textEditingValue.text.trim().toLowerCase();
+        if (keyword.isEmpty) {
+          return options;
+        }
+        return options.where(
+          (group) => group.toLowerCase().contains(keyword),
+        );
+      },
+      onSelected: (value) => controller.text = value,
+      fieldViewBuilder:
+          (context, textEditingController, focusNode, onSubmitted) {
+        textEditingController.value = controller.value;
+        textEditingController.addListener(() {
+          controller.value = textEditingController.value;
+        });
+        return TextField(
+          controller: textEditingController,
+          focusNode: focusNode,
+          decoration: const InputDecoration(
+            labelText: '分组',
+            hintText: '可选已有分组或直接输入',
+          ),
+          onSubmitted: (_) => onSubmitted(),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, autocompleteOptions) {
+        final items = autocompleteOptions.toList(growable: false);
+        if (items.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(12),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxHeight: 220,
+                maxWidth: 280,
+              ),
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                shrinkWrap: true,
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final group = items[index];
+                  return ListTile(
+                    dense: true,
+                    title: Text(group),
+                    onTap: () => onSelected(group),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   void initState() {
@@ -881,6 +953,8 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
     final nameC = TextEditingController(text: env.name);
     final valueC = TextEditingController(text: env.value);
     final remarksC = TextEditingController(text: env.remarks);
+    final groupC = TextEditingController(text: env.group);
+    final groups = [...ref.read(envListProvider).groups];
 
     showModalBottomSheet(
       context: context,
@@ -987,6 +1061,8 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                 controller: remarksC,
                 decoration: const InputDecoration(labelText: '备注'),
               ),
+              const SizedBox(height: 12),
+              _buildGroupAutocomplete(controller: groupC, options: groups),
               const SizedBox(height: 20),
               Row(
                 children: [
@@ -1029,6 +1105,7 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                               nameC.text.trim(),
                               valueC.text,
                               remarks: remarksC.text.trim(),
+                              group: groupC.text.trim(),
                             );
                         Navigator.of(ctx).pop();
                         ScaffoldMessenger.of(
@@ -1052,6 +1129,7 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
       nameC.dispose();
       valueC.dispose();
       remarksC.dispose();
+      groupC.dispose();
     });
   }
 
@@ -1060,6 +1138,7 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
     final valueC = TextEditingController();
     final remarksC = TextEditingController();
     final groupC = TextEditingController();
+    final groups = [...ref.read(envListProvider).groups];
 
     showModalBottomSheet(
       context: context,
@@ -1104,9 +1183,9 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: TextField(
+                    child: _buildGroupAutocomplete(
                       controller: groupC,
-                      decoration: const InputDecoration(labelText: '分组'),
+                      options: groups,
                     ),
                   ),
                 ],

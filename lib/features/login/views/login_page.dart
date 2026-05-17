@@ -310,6 +310,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           contentPadding: EdgeInsets.zero,
                           isDense: true,
                         ),
+                        textAlignVertical: TextAlignVertical.center,
                         textInputAction: TextInputAction.next,
                         validator: (v) =>
                             v == null || v.trim().isEmpty ? '请输入用户名' : null,
@@ -344,6 +345,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           contentPadding: EdgeInsets.zero,
                           isDense: true,
                         ),
+                        textAlignVertical: TextAlignVertical.center,
                         obscureText: _obscurePassword,
                         textInputAction: _needsTotp
                             ? TextInputAction.next
@@ -361,6 +363,17 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       const SizedBox(height: 6),
                       _IconInput(
                         icon: Icons.security,
+                        suffix: SizedBox(
+                          width: 40,
+                          child: Text(
+                            '${_totpController.text.trim().length}/6',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
                         child: TextFormField(
                           controller: _totpController,
                           decoration: const InputDecoration(
@@ -371,9 +384,17 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             contentPadding: EdgeInsets.zero,
                             isDense: true,
                           ),
+                          textAlignVertical: TextAlignVertical.center,
                           keyboardType: TextInputType.number,
                           maxLength: 6,
+                          buildCounter: (
+                            BuildContext context, {
+                            required int currentLength,
+                            required bool isFocused,
+                            required int? maxLength,
+                          }) => null,
                           textInputAction: TextInputAction.go,
+                          onChanged: (_) => setState(() {}),
                           onFieldSubmitted: (_) => _submit(),
                           validator: (v) {
                             if (v == null || v.trim().isEmpty) return '请输入验证码';
@@ -550,7 +571,7 @@ class _IconInput extends StatelessWidget {
         children: [
           Icon(icon, size: 20, color: AppColors.slate400),
           const SizedBox(width: 12),
-          Expanded(child: Center(heightFactor: 1, child: child)),
+          Expanded(child: child),
           if (suffix != null) ...[const SizedBox(width: 8), suffix!],
         ],
       ),

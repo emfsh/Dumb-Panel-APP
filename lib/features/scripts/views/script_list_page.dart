@@ -14,6 +14,7 @@ import '../../../core/network/dio_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/utils/api_utils.dart';
 import '../../../shared/utils/ansi_text.dart';
+import '../../../shared/utils/log_background.dart';
 import '../../tasks/views/task_form_page.dart';
 
 final scriptProvider = StateNotifierProvider<ScriptNotifier, ScriptState>((
@@ -2217,10 +2218,17 @@ class _ScriptDebugRunSheetState extends State<_ScriptDebugRunSheet> {
   bool _autoScroll = true;
   String _statusText = '启动中...';
   Timer? _pollTimer;
+  Color? _logBackgroundColor;
 
   @override
   void initState() {
     super.initState();
+    Future.microtask(() async {
+      final color = await loadPanelLogBackgroundColor();
+      if (mounted) {
+        setState(() => _logBackgroundColor = color);
+      }
+    });
     _loadLogs();
     _pollTimer = Timer.periodic(const Duration(seconds: 1), (_) => _loadLogs());
   }
@@ -2401,13 +2409,13 @@ class _ScriptDebugRunSheetState extends State<_ScriptDebugRunSheet> {
                 ],
               ),
               Expanded(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: AppColors.termBg,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                    color: _logBackgroundColor ?? AppColors.termBg,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   child: _loading
                       ? const Center(
                           child: CircularProgressIndicator(

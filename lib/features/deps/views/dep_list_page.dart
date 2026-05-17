@@ -9,6 +9,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/dependency.dart';
 import '../../../shared/utils/api_utils.dart';
 import '../../../shared/utils/ansi_text.dart';
+import '../../../shared/utils/log_background.dart';
 
 // ── Provider ──
 
@@ -1159,10 +1160,17 @@ class _DepLogStreamPageState extends ConsumerState<DepLogStreamPage> {
   final _logs = <String>[];
   final _scrollController = ScrollController();
   bool _done = false;
+  Color? _logBackgroundColor;
 
   @override
   void initState() {
     super.initState();
+    Future.microtask(() async {
+      final color = await loadPanelLogBackgroundColor();
+      if (mounted) {
+        setState(() => _logBackgroundColor = color);
+      }
+    });
     _sseClient.connect(
       path: ApiEndpoints.depLogStream(widget.depId),
       autoReconnect: true,
@@ -1201,13 +1209,15 @@ class _DepLogStreamPageState extends ConsumerState<DepLogStreamPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: _logBackgroundColor ?? Colors.white,
       appBar: AppBar(
         title: const Text('安装日志'),
-        backgroundColor: Colors.white,
+        backgroundColor: _logBackgroundColor ?? Colors.white,
         foregroundColor: AppColors.slate900,
       ),
-      body: Column(
+      body: Container(
+        color: _logBackgroundColor ?? AppColors.termBg,
+        child: Column(
         children: [
           Expanded(
             child: ListView.builder(
@@ -1234,7 +1244,7 @@ class _DepLogStreamPageState extends ConsumerState<DepLogStreamPage> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
-              color: const Color(0xFF252526),
+              color: AppColors.slate100,
               child: const Text(
                 '安装完成',
                 textAlign: TextAlign.center,
@@ -1242,6 +1252,7 @@ class _DepLogStreamPageState extends ConsumerState<DepLogStreamPage> {
               ),
             ),
         ],
+        ),
       ),
     );
   }
