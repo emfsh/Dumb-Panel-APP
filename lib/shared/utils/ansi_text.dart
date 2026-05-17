@@ -6,10 +6,7 @@ class AnsiTextTheme {
   final Color foreground;
   final Color background;
 
-  const AnsiTextTheme({
-    required this.foreground,
-    required this.background,
-  });
+  const AnsiTextTheme({required this.foreground, required this.background});
 }
 
 class AnsiTextParser {
@@ -20,7 +17,10 @@ class AnsiTextParser {
     required TextStyle baseStyle,
     required Brightness brightness,
   }) {
-    final palette = _paletteForBrightness(brightness);
+    final palette = _paletteForBrightness(
+      brightness,
+      defaultForeground: baseStyle.color,
+    );
     final spans = <InlineSpan>[];
     var state = _AnsiStyleState.defaults(palette);
     var cursor = 0;
@@ -66,13 +66,16 @@ class AnsiTextParser {
         .toList(growable: false);
   }
 
-  static _AnsiPalette _paletteForBrightness(Brightness brightness) {
+  static _AnsiPalette _paletteForBrightness(
+    Brightness brightness, {
+    Color? defaultForeground,
+  }) {
     if (brightness == Brightness.dark) {
-      return const _AnsiPalette(
-        defaultForeground: AppColors.termText,
+      return _AnsiPalette(
+        defaultForeground: defaultForeground ?? AppColors.slate50,
         defaultBackground: Colors.transparent,
-        colors: [
-          Color(0xFF111827),
+        colors: const [
+          AppColors.slate400,
           Color(0xFFF87171),
           AppColors.termGreen,
           Color(0xFFFBBF24),
@@ -81,8 +84,8 @@ class AnsiTextParser {
           Color(0xFF22D3EE),
           Color(0xFFE5E7EB),
         ],
-        brightColors: [
-          Color(0xFF6B7280),
+        brightColors: const [
+          AppColors.slate200,
           Color(0xFFFCA5A5),
           Color(0xFF6EE7B7),
           Color(0xFFFCD34D),
@@ -94,10 +97,10 @@ class AnsiTextParser {
       );
     }
 
-    return const _AnsiPalette(
-      defaultForeground: AppColors.slate700,
+    return _AnsiPalette(
+      defaultForeground: defaultForeground ?? AppColors.slate700,
       defaultBackground: Colors.transparent,
-      colors: [
+      colors: const [
         Color(0xFF111827),
         Color(0xFFDC2626),
         Color(0xFF059669),
@@ -107,7 +110,7 @@ class AnsiTextParser {
         Color(0xFF0F766E),
         Color(0xFFE5E7EB),
       ],
-      brightColors: [
+      brightColors: const [
         Color(0xFF6B7280),
         Color(0xFFEF4444),
         Color(0xFF10B981),

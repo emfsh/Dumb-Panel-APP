@@ -12,6 +12,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/task.dart';
 import '../../../shared/utils/ansi_text.dart';
 import '../../../shared/utils/api_utils.dart';
+import '../../../shared/utils/log_background.dart';
 import '../../../shared/widgets/task_cron_list.dart';
 import '../providers/task_provider.dart';
 
@@ -297,7 +298,8 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                     label: Text(filter.label),
                     selected: selected,
                     onSelected: (_) {
-                      if (_scrollController.hasClients && _scrollController.offset > 0) {
+                      if (_scrollController.hasClients &&
+                          _scrollController.offset > 0) {
                         _scrollController.jumpTo(0);
                       }
                       ref
@@ -335,7 +337,8 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                   if (state.statusFilter != null)
                     TextButton(
                       onPressed: () {
-                        if (_scrollController.hasClients && _scrollController.offset > 0) {
+                        if (_scrollController.hasClients &&
+                            _scrollController.offset > 0) {
                           _scrollController.jumpTo(0);
                         }
                         ref.read(taskProvider.notifier).setStatusFilter(null);
@@ -409,18 +412,13 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
 
     for (final task in tasks) {
       final groupName = task.groupName?.trim();
-      final key = (groupName == null || groupName.isEmpty)
-          ? ''
-          : groupName;
+      final key = (groupName == null || groupName.isEmpty) ? '' : groupName;
       final title = key.isEmpty ? '未分组' : key;
-      final entry = map.putIfAbsent(
-        key,
-        () {
-          final created = _TaskGroup(key: key, title: title);
-          groups.add(created);
-          return created;
-        },
-      );
+      final entry = map.putIfAbsent(key, () {
+        final created = _TaskGroup(key: key, title: title);
+        groups.add(created);
+        return created;
+      });
       entry.tasks.add(task);
     }
 
@@ -483,10 +481,7 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                   ),
                   const SizedBox(width: 10),
                   if (runningCount > 0)
-                    _MetaChip(
-                      label: '$runningCount 运行中',
-                      active: true,
-                    )
+                    _MetaChip(label: '$runningCount 运行中', active: true)
                   else
                     _MetaChip(
                       label: '$enabledCount 已启用',
@@ -589,7 +584,9 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
           );
           _showMessage('任务和关联脚本已删除');
         } catch (error) {
-          _showMessage('任务已删除，但脚本删除失败：${extractErrorMessage(error, '请稍后手动删除脚本')}');
+          _showMessage(
+            '任务已删除，但脚本删除失败：${extractErrorMessage(error, '请稍后手动删除脚本')}',
+          );
         }
         return;
       }
@@ -827,7 +824,12 @@ class _TaskCard extends StatelessWidget {
                     color: dotColor,
                     shape: BoxShape.circle,
                     boxShadow: task.isRunning || hasFailure
-                        ? [BoxShadow(color: dotColor.withAlpha(140), blurRadius: 8)]
+                        ? [
+                            BoxShadow(
+                              color: dotColor.withAlpha(140),
+                              blurRadius: 8,
+                            ),
+                          ]
                         : null,
                   ),
                 ),
@@ -835,7 +837,10 @@ class _TaskCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     task.name,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -843,17 +848,28 @@ class _TaskCard extends StatelessWidget {
                 if (task.isPinned)
                   const Padding(
                     padding: EdgeInsets.only(right: 6),
-                    child: Icon(Icons.push_pin, size: 14, color: AppColors.amber500),
+                    child: Icon(
+                      Icons.push_pin,
+                      size: 14,
+                      color: AppColors.amber500,
+                    ),
                   ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: _statusBg(),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
                     _statusLabel(),
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: _statusFg()),
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: _statusFg(),
+                    ),
                   ),
                 ),
               ],
@@ -862,8 +878,10 @@ class _TaskCard extends StatelessWidget {
             Row(
               children: [
                 Icon(
-                  task.taskType == 'cron' ? Icons.schedule_outlined
-                      : task.taskType == 'manual' ? Icons.touch_app_outlined
+                  task.taskType == 'cron'
+                      ? Icons.schedule_outlined
+                      : task.taskType == 'manual'
+                      ? Icons.touch_app_outlined
                       : Icons.power_settings_new_outlined,
                   size: 12,
                   color: isLight ? AppColors.slate400 : AppColors.slate500,
@@ -894,7 +912,8 @@ class _TaskCard extends StatelessWidget {
                 runSpacing: 6,
                 children: [
                   ...labels.take(3).map((label) => _MetaChip(label: label)),
-                  if (labels.length > 3) _MetaChip(label: '+${labels.length - 3}'),
+                  if (labels.length > 3)
+                    _MetaChip(label: '+${labels.length - 3}'),
                 ],
               ),
             ],
@@ -906,25 +925,36 @@ class _TaskCard extends StatelessWidget {
                     _bottomText(),
                     style: TextStyle(
                       fontSize: 11,
-                      color: hasFailure ? AppColors.red500 : (isLight ? AppColors.slate400 : AppColors.slate500),
+                      color: hasFailure
+                          ? AppColors.red500
+                          : (isLight ? AppColors.slate400 : AppColors.slate500),
                     ),
                   ),
                 ),
                 _SmallIconBtn(
-                  icon: task.isRunning ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                  icon: task.isRunning
+                      ? Icons.stop_rounded
+                      : Icons.play_arrow_rounded,
                   onTap: task.isRunning ? onStop : onRun,
                   color: task.isRunning ? AppColors.red500 : AppColors.primary,
                 ),
                 const SizedBox(width: 6),
                 _SmallIconBtn(
-                  icon: task.isDisabled ? Icons.toggle_on_outlined : Icons.toggle_off_outlined,
+                  icon: task.isDisabled
+                      ? Icons.toggle_on_outlined
+                      : Icons.toggle_off_outlined,
                   onTap: onToggleEnabled,
-                  color: task.isDisabled ? AppColors.primary : AppColors.slate400,
+                  color: task.isDisabled
+                      ? AppColors.primary
+                      : AppColors.slate400,
                 ),
                 const SizedBox(width: 6),
                 _SmallIconBtn(icon: Icons.edit_outlined, onTap: onEdit),
                 const SizedBox(width: 6),
-                _SmallIconBtn(icon: Icons.more_horiz, onTap: () => _showActionMenu(context)),
+                _SmallIconBtn(
+                  icon: Icons.more_horiz,
+                  onTap: () => _showActionMenu(context),
+                ),
               ],
             ),
           ],
@@ -1111,9 +1141,7 @@ class _SmallIconBtn extends StatelessWidget {
         decoration: BoxDecoration(
           color: btnColor.withAlpha(isLight ? 16 : 22),
           shape: BoxShape.circle,
-          border: Border.all(
-            color: btnColor.withAlpha(isLight ? 40 : 50),
-          ),
+          border: Border.all(color: btnColor.withAlpha(isLight ? 40 : 50)),
         ),
         child: Icon(icon, size: 18, color: btnColor),
       ),
@@ -1143,7 +1171,9 @@ class TaskDetailSheet extends StatelessWidget {
     final labels = task.labelsForDisplay;
     final scheduleExpressions = task.cronExpressions.isNotEmpty
         ? task.cronExpressions
-        : (task.cronExpression.trim().isNotEmpty ? [task.cronExpression.trim()] : const <String>[]);
+        : (task.cronExpression.trim().isNotEmpty
+              ? [task.cronExpression.trim()]
+              : const <String>[]);
 
     Widget infoTile(String label, Widget child, {bool expand = false}) {
       return Container(
@@ -1203,7 +1233,10 @@ class TaskDetailSheet extends StatelessWidget {
                     children: [
                       infoTile(
                         '状态',
-                        _MetaChip(label: task.statusText, active: !task.isDisabled),
+                        _MetaChip(
+                          label: task.statusText,
+                          active: !task.isDisabled,
+                        ),
                       ),
                       infoTile(
                         '任务类型',
@@ -1211,8 +1244,8 @@ class TaskDetailSheet extends StatelessWidget {
                           task.taskType == 'manual'
                               ? '手动运行'
                               : task.taskType == 'startup'
-                                  ? '开机运行'
-                                  : '常规定时',
+                              ? '开机运行'
+                              : '常规定时',
                           style: const TextStyle(fontSize: 13),
                         ),
                       ),
@@ -1265,7 +1298,9 @@ class TaskDetailSheet extends StatelessWidget {
                         Text(
                           task.lastRunAt == null
                               ? '-'
-                              : DateFormat('yyyy-MM-dd HH:mm:ss').format(task.lastRunAt!.toLocal()),
+                              : DateFormat(
+                                  'yyyy-MM-dd HH:mm:ss',
+                                ).format(task.lastRunAt!.toLocal()),
                           style: const TextStyle(fontSize: 13),
                         ),
                       ),
@@ -1274,7 +1309,9 @@ class TaskDetailSheet extends StatelessWidget {
                         Text(
                           task.nextRunAt == null
                               ? '-'
-                              : DateFormat('yyyy-MM-dd HH:mm:ss').format(task.nextRunAt!.toLocal()),
+                              : DateFormat(
+                                  'yyyy-MM-dd HH:mm:ss',
+                                ).format(task.nextRunAt!.toLocal()),
                           style: const TextStyle(fontSize: 13),
                         ),
                       ),
@@ -1284,11 +1321,13 @@ class TaskDetailSheet extends StatelessWidget {
                           task.lastRunStatus == null
                               ? '未运行'
                               : task.lastRunStatus == 0
-                                  ? '成功'
-                                  : '失败',
+                              ? '成功'
+                              : '失败',
                           style: TextStyle(
                             fontSize: 13,
-                            color: task.lastRunStatus == 1 ? AppColors.red500 : null,
+                            color: task.lastRunStatus == 1
+                                ? AppColors.red500
+                                : null,
                           ),
                         ),
                       ),
@@ -1324,10 +1363,12 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
   String _statusText = '连接中...';
   Timer? _pollTimer;
   int _pollAttempts = 0;
+  Color? _logBackgroundColor;
 
   @override
   void initState() {
     super.initState();
+    _loadAppearance();
     Future.microtask(_init);
   }
 
@@ -1360,16 +1401,21 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
     _startPolling();
   }
 
-  void _applyLiveSnapshot(
-    Map<String, dynamic> data, {
-    bool initial = false,
-  }) {
+  Future<void> _loadAppearance() async {
+    final color = await loadPanelLogBackgroundColor();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _logBackgroundColor = color);
+  }
+
+  void _applyLiveSnapshot(Map<String, dynamic> data, {bool initial = false}) {
     final rawLogs = data['logs'];
     final logs = rawLogs is List
         ? rawLogs
-            .map((item) => item.toString())
-            .where((line) => line.trim().isNotEmpty)
-            .toList()
+              .map((item) => item.toString())
+              .where((line) => line.trim().isNotEmpty)
+              .toList()
         : const <String>[];
     final done = data['done'] == true;
     final status = (data['status'] as num?)?.toDouble();
@@ -1571,28 +1617,43 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
     final title = (widget.taskName?.trim().isNotEmpty ?? false)
         ? '${widget.taskName} 运行日志'
         : '运行日志';
+    final logTheme = resolveLogSurfaceTheme(_logBackgroundColor);
+    final chipBackground = logTheme.brightness == Brightness.dark
+        ? AppColors.slate800
+        : AppColors.slate100;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: logTheme.background,
       appBar: AppBar(
         title: Text(title),
-        backgroundColor: Colors.white,
-        foregroundColor: AppColors.slate900,
+        backgroundColor: logTheme.background,
+        foregroundColor: logTheme.foreground,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 4),
             child: Chip(
-              label: Text(_statusText, style: const TextStyle(fontSize: 11)),
+              backgroundColor: chipBackground,
+              label: Text(
+                _statusText,
+                style: TextStyle(fontSize: 11, color: logTheme.foreground),
+              ),
               avatar: _done
-                  ? const Icon(Icons.check, size: 14)
-                  : const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)),
+                  ? Icon(Icons.check, size: 14, color: logTheme.foreground)
+                  : SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: logTheme.foreground,
+                      ),
+                    ),
               visualDensity: VisualDensity.compact,
             ),
           ),
           IconButton(
             icon: Icon(
               _autoScroll ? Icons.vertical_align_bottom : Icons.pause,
-              color: _autoScroll ? AppColors.primary : Colors.white70,
+              color: _autoScroll ? AppColors.primary : logTheme.mutedForeground,
             ),
             tooltip: _autoScroll ? '自动滚动: 开' : '自动滚动: 关',
             onPressed: () {
@@ -1603,14 +1664,16 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
         ],
       ),
       body: Container(
-        color: AppColors.termBg,
+        color: logTheme.background,
         child: _loading && _lines.isEmpty
-            ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              )
             : _lines.isEmpty
             ? Center(
                 child: Text(
                   _done ? '无日志内容' : '等待日志输出...',
-                  style: const TextStyle(color: AppColors.termText),
+                  style: TextStyle(color: logTheme.mutedForeground),
                 ),
               )
             : Theme(
@@ -1629,13 +1692,13 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
                       child: RichText(
                         text: AnsiTextParser.buildTextSpan(
                           _lines.join('\n'),
-                          baseStyle: const TextStyle(
-                            color: AppColors.termText,
+                          baseStyle: TextStyle(
+                            color: logTheme.foreground,
                             fontFamily: 'monospace',
                             fontSize: 12,
                             height: 1.6,
                           ),
-                          brightness: Brightness.light,
+                          brightness: logTheme.brightness,
                         ),
                       ),
                     ),

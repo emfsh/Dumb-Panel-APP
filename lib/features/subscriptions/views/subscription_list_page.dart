@@ -1112,7 +1112,10 @@ class _SubscriptionLogsPageState extends ConsumerState<SubscriptionLogsPage> {
   }
 
   void _showLogDetail(Map<String, dynamic> log) {
-    final isLight = Theme.of(context).brightness == Brightness.light;
+    final logTheme = resolveLogSurfaceTheme(_logBackgroundColor);
+    final borderColor = logTheme.brightness == Brightness.dark
+        ? AppColors.slate700
+        : AppColors.slate200;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1134,14 +1137,9 @@ class _SubscriptionLogsPageState extends ConsumerState<SubscriptionLogsPage> {
                   child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: _logBackgroundColor ??
-                          (isLight ? Colors.white : const Color(0xFF1E1E1E)),
+                      color: logTheme.background,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isLight
-                            ? AppColors.slate200
-                            : AppColors.slate800,
-                      ),
+                      border: Border.all(color: borderColor),
                     ),
                     child: SingleChildScrollView(
                       child: SelectionArea(
@@ -1151,16 +1149,12 @@ class _SubscriptionLogsPageState extends ConsumerState<SubscriptionLogsPage> {
                                 ? log['content'].toString()
                                 : '(无日志内容)',
                             baseStyle: TextStyle(
-                              color: isLight
-                                  ? AppColors.slate700
-                                  : const Color(0xFFD4D4D4),
+                              color: logTheme.foreground,
                               fontFamily: 'monospace',
                               fontSize: 12,
                               height: 1.6,
                             ),
-                            brightness: isLight
-                                ? Brightness.light
-                                : Brightness.dark,
+                            brightness: logTheme.brightness,
                           ),
                         ),
                       ),
@@ -1443,57 +1437,67 @@ class _SubscriptionPullStreamPageState
 
   @override
   Widget build(BuildContext context) {
+    final logTheme = resolveLogSurfaceTheme(_logBackgroundColor);
+    final doneBannerBackground = logTheme.brightness == Brightness.dark
+        ? AppColors.slate800
+        : AppColors.slate100;
+
     return Scaffold(
-      backgroundColor: _logBackgroundColor ?? Colors.white,
+      backgroundColor: logTheme.background,
       appBar: AppBar(
         title: const Text('拉取日志'),
-        backgroundColor: _logBackgroundColor ?? Colors.white,
-        foregroundColor: AppColors.slate900,
+        backgroundColor: logTheme.background,
+        foregroundColor: logTheme.foreground,
       ),
       body: Container(
-        color: _logBackgroundColor ?? AppColors.termBg,
+        color: logTheme.background,
         child: Column(
-        children: [
-          Expanded(
-            child: _logs.isEmpty && _statusMessage != null
-                ? Center(
-                    child: Text(
-                      _statusMessage!,
-                      style: const TextStyle(color: AppColors.termText),
-                    ),
-                  )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(12),
-                    itemCount: _logs.length,
-                    itemBuilder: (_, i) => SelectionArea(
-                      child: RichText(
-                        text: AnsiTextParser.buildTextSpan(
-                          _logs[i],
-                          baseStyle: const TextStyle(
-                            color: AppColors.termText,
-                            fontFamily: 'monospace',
-                            fontSize: 12,
-                            height: 1.6,
+          children: [
+            Expanded(
+              child: _logs.isEmpty && _statusMessage != null
+                  ? Center(
+                      child: Text(
+                        _statusMessage!,
+                        style: TextStyle(color: logTheme.mutedForeground),
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.all(12),
+                      itemCount: _logs.length,
+                      itemBuilder: (_, i) => SelectionArea(
+                        child: RichText(
+                          text: AnsiTextParser.buildTextSpan(
+                            _logs[i],
+                            baseStyle: TextStyle(
+                              color: logTheme.foreground,
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                              height: 1.6,
+                            ),
+                            brightness: logTheme.brightness,
                           ),
-                          brightness: Brightness.light,
                         ),
                       ),
                     ),
-                  ),
-          ),
-          if (_done)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              color: AppColors.slate100,
-              child: const Text(
-                '拉取完成',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.primary, fontSize: 13),
-              ),
             ),
-        ],
+            if (_done)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                color: doneBannerBackground,
+                child: Text(
+                  '拉取完成',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: logTheme.brightness == Brightness.dark
+                        ? logTheme.foreground
+                        : AppColors.primary,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

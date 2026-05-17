@@ -424,7 +424,8 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
       final result = <ScriptFile>[];
       for (final item in items) {
         final children = visit(item.children);
-        final matched = item.name.toLowerCase().contains(query) ||
+        final matched =
+            item.name.toLowerCase().contains(query) ||
             item.path.toLowerCase().contains(query);
         if (matched || children.isNotEmpty) {
           result.add(
@@ -1220,14 +1221,16 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
                       }
                       await _maybePromptAddToTask(paths.first);
                     }
-      } catch (error) {
-        if (!mounted) {
-          return;
-        }
-        messenger.showSnackBar(
-          SnackBar(content: Text(_extractScriptError(error, '上传失败'))),
-        );
-      }
+                  } catch (error) {
+                    if (!mounted) {
+                      return;
+                    }
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(_extractScriptError(error, '上传失败')),
+                      ),
+                    );
+                  }
                 },
                 child: const Text('上传'),
               ),
@@ -1473,7 +1476,9 @@ class _ScriptViewPageState extends ConsumerState<ScriptViewPage> {
       String? runId;
       if (raw is Map && raw['run_id'] != null) {
         runId = raw['run_id'].toString();
-      } else if (raw is Map && raw['data'] is Map && raw['data']['run_id'] != null) {
+      } else if (raw is Map &&
+          raw['data'] is Map &&
+          raw['data']['run_id'] != null) {
         runId = raw['data']['run_id'].toString();
       }
       if (runId == null || runId.isEmpty) {
@@ -1487,10 +1492,8 @@ class _ScriptViewPageState extends ConsumerState<ScriptViewPage> {
         context: context,
         isScrollControlled: true,
         showDragHandle: true,
-        builder: (context) => _ScriptDebugRunSheet(
-          path: widget.path,
-          runId: runId!,
-        ),
+        builder: (context) =>
+            _ScriptDebugRunSheet(path: widget.path, runId: runId!),
       );
     } catch (error) {
       _showMessage(_extractScriptError(error, '调试运行失败'));
@@ -1878,25 +1881,25 @@ class _ScriptViewPageState extends ConsumerState<ScriptViewPage> {
                               : AppColors.primary.withAlpha(60),
                         ),
                         child: TextField(
-                        controller: _contentController,
-                        focusNode: _contentFocusNode,
-                        scrollController: _contentScrollController,
-                        readOnly: !_editing,
-                        expands: true,
-                        maxLines: null,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontFamily: 'monospace',
-                          height: 1.5,
-                          color: editorForeground,
+                          controller: _contentController,
+                          focusNode: _contentFocusNode,
+                          scrollController: _contentScrollController,
+                          readOnly: !_editing,
+                          expands: true,
+                          maxLines: null,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontFamily: 'monospace',
+                            height: 1.5,
+                            color: editorForeground,
+                          ),
+                          cursorColor: editorForeground,
+                          selectionHeightStyle: BoxHeightStyle.max,
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.all(14),
+                          ),
                         ),
-                        cursorColor: editorForeground,
-                        selectionHeightStyle: BoxHeightStyle.max,
-                        decoration: const InputDecoration(
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.all(14),
-                        ),
-                      ),
                       ),
                     ),
                   ),
@@ -2201,10 +2204,7 @@ class _ScriptDebugRunSheet extends StatefulWidget {
   final String path;
   final String runId;
 
-  const _ScriptDebugRunSheet({
-    required this.path,
-    required this.runId,
-  });
+  const _ScriptDebugRunSheet({required this.path, required this.runId});
 
   @override
   State<_ScriptDebugRunSheet> createState() => _ScriptDebugRunSheetState();
@@ -2252,7 +2252,10 @@ class _ScriptDebugRunSheetState extends State<_ScriptDebugRunSheet> {
 
       final rawLogs = data['logs'];
       final nextLogs = rawLogs is List
-          ? rawLogs.map((item) => item.toString()).where((item) => item.trim().isNotEmpty).toList()
+          ? rawLogs
+                .map((item) => item.toString())
+                .where((item) => item.trim().isNotEmpty)
+                .toList()
           : const <String>[];
       final done = data['done'] == true;
       final exitCode = data['exit_code'];
@@ -2319,7 +2322,9 @@ class _ScriptDebugRunSheetState extends State<_ScriptDebugRunSheet> {
 
   Future<void> _stopRun() async {
     try {
-      await DioClient.instance.dio.put(ApiEndpoints.scriptsRunStop(widget.runId));
+      await DioClient.instance.dio.put(
+        ApiEndpoints.scriptsRunStop(widget.runId),
+      );
       if (!mounted) {
         return;
       }
@@ -2341,6 +2346,8 @@ class _ScriptDebugRunSheetState extends State<_ScriptDebugRunSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final logTheme = resolveLogSurfaceTheme(_logBackgroundColor);
+
     return SafeArea(
       child: SizedBox(
         height: MediaQuery.of(context).size.height * 0.8,
@@ -2351,16 +2358,16 @@ class _ScriptDebugRunSheetState extends State<_ScriptDebugRunSheet> {
             children: [
               Text(
                 '脚本调试',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 4),
               Text(
                 widget.path,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 12),
               Row(
@@ -2409,13 +2416,13 @@ class _ScriptDebugRunSheetState extends State<_ScriptDebugRunSheet> {
                 ],
               ),
               Expanded(
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                    color: _logBackgroundColor ?? AppColors.termBg,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: logTheme.background,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   child: _loading
                       ? const Center(
                           child: CircularProgressIndicator(
@@ -2423,32 +2430,32 @@ class _ScriptDebugRunSheetState extends State<_ScriptDebugRunSheet> {
                           ),
                         )
                       : _logs.isEmpty
-                          ? const Center(
-                              child: Text(
-                                '等待调试输出...',
-                                style: TextStyle(color: AppColors.termText),
-                              ),
-                            )
-                          : Scrollbar(
-                              controller: _scrollController,
-                              child: SingleChildScrollView(
-                                controller: _scrollController,
-                                child: SelectionArea(
-                                  child: RichText(
-                                    text: AnsiTextParser.buildTextSpan(
-                                      _logs.join('\n'),
-                                      baseStyle: const TextStyle(
-                                        color: AppColors.termText,
-                                        fontFamily: 'monospace',
-                                        fontSize: 12,
-                                        height: 1.55,
-                                      ),
-                                      brightness: Brightness.light,
-                                    ),
+                      ? Center(
+                          child: Text(
+                            '等待调试输出...',
+                            style: TextStyle(color: logTheme.mutedForeground),
+                          ),
+                        )
+                      : Scrollbar(
+                          controller: _scrollController,
+                          child: SingleChildScrollView(
+                            controller: _scrollController,
+                            child: SelectionArea(
+                              child: RichText(
+                                text: AnsiTextParser.buildTextSpan(
+                                  _logs.join('\n'),
+                                  baseStyle: TextStyle(
+                                    color: logTheme.foreground,
+                                    fontFamily: 'monospace',
+                                    fontSize: 12,
+                                    height: 1.55,
                                   ),
+                                  brightness: logTheme.brightness,
                                 ),
                               ),
                             ),
+                          ),
+                        ),
                 ),
               ),
             ],

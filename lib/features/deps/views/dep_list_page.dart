@@ -908,7 +908,10 @@ class _DepListPageState extends ConsumerState<DepListPage> {
                   onPressed: _handleBatchDelete,
                   icon: const Icon(Icons.delete_sweep_outlined, size: 18),
                   label: Text('批量卸载 (${_selectedIds.length})'),
-                  style: FilledButton.styleFrom(foregroundColor: AppColors.red500, minimumSize: const Size(double.infinity, 40)),
+                  style: FilledButton.styleFrom(
+                    foregroundColor: AppColors.red500,
+                    minimumSize: const Size(double.infinity, 40),
+                  ),
                 ),
               ),
             ],
@@ -1081,7 +1084,10 @@ class _DepCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         dep.name,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -1089,7 +1095,13 @@ class _DepCard extends StatelessWidget {
                     if (dep.version.isNotEmpty)
                       Text(
                         dep.version,
-                        style: TextStyle(fontSize: 10, color: isLight ? AppColors.slate500 : AppColors.slate400, fontFamily: 'monospace'),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isLight
+                              ? AppColors.slate500
+                              : AppColors.slate400,
+                          fontFamily: 'monospace',
+                        ),
                       ),
                   ],
                 ),
@@ -1097,13 +1109,36 @@ class _DepCard extends StatelessWidget {
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                      decoration: BoxDecoration(color: _statusBg(), borderRadius: BorderRadius.circular(4)),
-                      child: Text(dep.statusText, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: _statusFg())),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _statusBg(),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        dep.statusText,
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: _statusFg(),
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text(subtitle, style: TextStyle(fontSize: 10, color: isLight ? AppColors.slate400 : AppColors.slate500), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      child: Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isLight
+                              ? AppColors.slate400
+                              : AppColors.slate500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
@@ -1121,10 +1156,14 @@ class _DepCard extends StatelessWidget {
           PopupMenuButton<String>(
             onSelected: (action) {
               switch (action) {
-                case 'cancel': onCancel?.call();
-                case 'reinstall': onReinstall?.call();
-                case 'delete': onDelete?.call();
-                case 'force_delete': onForceDelete?.call();
+                case 'cancel':
+                  onCancel?.call();
+                case 'reinstall':
+                  onReinstall?.call();
+                case 'delete':
+                  onDelete?.call();
+                case 'force_delete':
+                  onForceDelete?.call();
               }
             },
             icon: const Icon(Icons.more_horiz, size: 18),
@@ -1136,7 +1175,13 @@ class _DepCard extends StatelessWidget {
               if (!dep.isBusy)
                 const PopupMenuItem(value: 'delete', child: Text('卸载')),
               if (!dep.isBusy)
-                PopupMenuItem(value: 'force_delete', child: Text('强制卸载', style: TextStyle(color: AppColors.red500))),
+                PopupMenuItem(
+                  value: 'force_delete',
+                  child: Text(
+                    '强制卸载',
+                    style: TextStyle(color: AppColors.red500),
+                  ),
+                ),
             ],
           ),
         ],
@@ -1208,50 +1253,60 @@ class _DepLogStreamPageState extends ConsumerState<DepLogStreamPage> {
 
   @override
   Widget build(BuildContext context) {
+    final logTheme = resolveLogSurfaceTheme(_logBackgroundColor);
+    final doneBannerBackground = logTheme.brightness == Brightness.dark
+        ? AppColors.slate800
+        : AppColors.slate100;
+
     return Scaffold(
-      backgroundColor: _logBackgroundColor ?? Colors.white,
+      backgroundColor: logTheme.background,
       appBar: AppBar(
         title: const Text('安装日志'),
-        backgroundColor: _logBackgroundColor ?? Colors.white,
-        foregroundColor: AppColors.slate900,
+        backgroundColor: logTheme.background,
+        foregroundColor: logTheme.foreground,
       ),
       body: Container(
-        color: _logBackgroundColor ?? AppColors.termBg,
+        color: logTheme.background,
         child: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(12),
-              itemCount: _logs.length,
-              itemBuilder: (_, i) => SelectionArea(
-                child: RichText(
-                  text: AnsiTextParser.buildTextSpan(
-                    _logs[i],
-                    baseStyle: const TextStyle(
-                      color: AppColors.termText,
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                      height: 1.6,
+          children: [
+            Expanded(
+              child: ListView.builder(
+                controller: _scrollController,
+                padding: const EdgeInsets.all(12),
+                itemCount: _logs.length,
+                itemBuilder: (_, i) => SelectionArea(
+                  child: RichText(
+                    text: AnsiTextParser.buildTextSpan(
+                      _logs[i],
+                      baseStyle: TextStyle(
+                        color: logTheme.foreground,
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                        height: 1.6,
+                      ),
+                      brightness: logTheme.brightness,
                     ),
-                    brightness: Brightness.light,
                   ),
                 ),
               ),
             ),
-          ),
-          if (_done)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              color: AppColors.slate100,
-              child: const Text(
-                '安装完成',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.primary, fontSize: 13),
+            if (_done)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                color: doneBannerBackground,
+                child: Text(
+                  '安装完成',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: logTheme.brightness == Brightness.dark
+                        ? logTheme.foreground
+                        : AppColors.primary,
+                    fontSize: 13,
+                  ),
+                ),
               ),
-            ),
-        ],
+          ],
         ),
       ),
     );

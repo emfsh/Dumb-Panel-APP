@@ -94,8 +94,10 @@ class _PanelLogPageState extends State<PanelLogPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isLight = theme.brightness == Brightness.light;
+    final logTheme = resolveLogSurfaceTheme(_logBackgroundColor);
+    final borderColor = logTheme.brightness == Brightness.dark
+        ? AppColors.slate700
+        : AppColors.slate200;
 
     return Scaffold(
       appBar: AppBar(
@@ -122,15 +124,19 @@ class _PanelLogPageState extends State<PanelLogPage> {
                     Expanded(
                       child: DropdownButtonFormField<String>(
                         initialValue: _selectedLevel,
-                        decoration: const InputDecoration(
-                          labelText: '日志级别',
-                        ),
+                        decoration: const InputDecoration(labelText: '日志级别'),
                         items: const [
                           DropdownMenuItem(value: '', child: Text('全部')),
-                          DropdownMenuItem(value: 'debug', child: Text('DEBUG')),
+                          DropdownMenuItem(
+                            value: 'debug',
+                            child: Text('DEBUG'),
+                          ),
                           DropdownMenuItem(value: 'info', child: Text('INFO')),
                           DropdownMenuItem(value: 'warn', child: Text('WARN')),
-                          DropdownMenuItem(value: 'error', child: Text('ERROR')),
+                          DropdownMenuItem(
+                            value: 'error',
+                            child: Text('ERROR'),
+                          ),
                         ],
                         onChanged: (value) {
                           setState(() => _selectedLevel = value ?? '');
@@ -144,9 +150,7 @@ class _PanelLogPageState extends State<PanelLogPage> {
                       child: TextField(
                         controller: _linesController,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          labelText: '行数',
-                        ),
+                        decoration: const InputDecoration(labelText: '行数'),
                         onSubmitted: (_) => _load(),
                       ),
                     ),
@@ -173,11 +177,9 @@ class _PanelLogPageState extends State<PanelLogPage> {
             child: Container(
               margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               decoration: BoxDecoration(
-                color: _logBackgroundColor ?? AppColors.termBg,
+                color: logTheme.background,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isLight ? AppColors.slate200 : AppColors.slate800,
-                ),
+                border: Border.all(color: borderColor),
               ),
               child: _loading
                   ? const Center(
@@ -189,11 +191,7 @@ class _PanelLogPageState extends State<PanelLogPage> {
                   ? Center(
                       child: Text(
                         '暂无日志内容',
-                        style: TextStyle(
-                          color: isLight
-                              ? AppColors.slate300
-                              : AppColors.slate400,
-                        ),
+                        style: TextStyle(color: logTheme.mutedForeground),
                       ),
                     )
                   : SingleChildScrollView(
@@ -202,13 +200,13 @@ class _PanelLogPageState extends State<PanelLogPage> {
                         child: RichText(
                           text: AnsiTextParser.buildTextSpan(
                             _content,
-                            baseStyle: const TextStyle(
-                              color: AppColors.termText,
+                            baseStyle: TextStyle(
+                              color: logTheme.foreground,
                               fontFamily: 'monospace',
                               fontSize: 12,
                               height: 1.55,
                             ),
-                            brightness: Brightness.light,
+                            brightness: logTheme.brightness,
                           ),
                         ),
                       ),

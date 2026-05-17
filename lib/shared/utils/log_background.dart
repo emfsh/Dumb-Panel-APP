@@ -2,11 +2,28 @@ import 'package:flutter/material.dart';
 
 import '../../core/network/api_endpoints.dart';
 import '../../core/network/dio_client.dart';
+import '../../core/theme/app_theme.dart';
 import 'api_utils.dart';
+
+class LogSurfaceTheme {
+  final Color background;
+  final Color foreground;
+  final Color mutedForeground;
+  final Brightness brightness;
+
+  const LogSurfaceTheme({
+    required this.background,
+    required this.foreground,
+    required this.mutedForeground,
+    required this.brightness,
+  });
+}
 
 Future<Color?> loadPanelLogBackgroundColor() async {
   try {
-    final response = await DioClient.instance.dio.get(ApiEndpoints.panelSettings);
+    final response = await DioClient.instance.dio.get(
+      ApiEndpoints.panelSettings,
+    );
     final data = extractData(response.data);
     if (data is! Map<String, dynamic>) {
       return null;
@@ -62,4 +79,17 @@ Color? parseColorSetting(String? raw) {
   }
 
   return null;
+}
+
+LogSurfaceTheme resolveLogSurfaceTheme(Color? configuredColor) {
+  final background = configuredColor ?? AppColors.termBg;
+  final brightness = ThemeData.estimateBrightnessForColor(background);
+  final isDark = brightness == Brightness.dark;
+
+  return LogSurfaceTheme(
+    background: background,
+    foreground: isDark ? AppColors.slate50 : AppColors.slate900,
+    mutedForeground: isDark ? AppColors.slate300 : AppColors.slate500,
+    brightness: brightness,
+  );
 }

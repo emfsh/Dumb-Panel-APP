@@ -185,20 +185,35 @@ class _LogStreamPageState extends State<LogStreamPage> {
 
   @override
   Widget build(BuildContext context) {
+    final logTheme = resolveLogSurfaceTheme(_logBackgroundColor);
+    final chipBackground = logTheme.brightness == Brightness.dark
+        ? AppColors.slate800
+        : AppColors.slate100;
+
     return Scaffold(
+      backgroundColor: logTheme.background,
       appBar: AppBar(
         title: Text('日志 #${widget.logId}'),
+        backgroundColor: logTheme.background,
+        foregroundColor: logTheme.foreground,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Chip(
-              label: Text(_status, style: const TextStyle(fontSize: 12)),
+              backgroundColor: chipBackground,
+              label: Text(
+                _status,
+                style: TextStyle(fontSize: 12, color: logTheme.foreground),
+              ),
               avatar: _done
-                  ? const Icon(Icons.check, size: 16)
-                  : const SizedBox(
+                  ? Icon(Icons.check, size: 16, color: logTheme.foreground)
+                  : SizedBox(
                       width: 14,
                       height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: logTheme.foreground,
+                      ),
                     ),
               visualDensity: VisualDensity.compact,
             ),
@@ -216,14 +231,14 @@ class _LogStreamPageState extends State<LogStreamPage> {
         ],
       ),
       body: Container(
-        color: _logBackgroundColor ?? AppColors.termBg,
+        color: logTheme.background,
         child: _loading && _lines.isEmpty
             ? const Center(child: CircularProgressIndicator())
             : _lines.isEmpty
             ? Center(
                 child: Text(
                   _done ? '无日志内容' : '等待日志...',
-                  style: const TextStyle(color: AppColors.termText),
+                  style: TextStyle(color: logTheme.mutedForeground),
                 ),
               )
             : Theme(
@@ -242,13 +257,13 @@ class _LogStreamPageState extends State<LogStreamPage> {
                       child: RichText(
                         text: AnsiTextParser.buildTextSpan(
                           _lines.join('\n'),
-                          baseStyle: const TextStyle(
+                          baseStyle: TextStyle(
                             fontFamily: 'monospace',
                             fontSize: 13,
-                            color: AppColors.termText,
+                            color: logTheme.foreground,
                             height: 1.5,
                           ),
-                          brightness: Brightness.light,
+                          brightness: logTheme.brightness,
                         ),
                       ),
                     ),
