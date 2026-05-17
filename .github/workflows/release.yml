@@ -305,9 +305,29 @@ jobs:
       - name: Build unsigned IPA
         if: steps.signing.outputs.mode != 'signed'
         run: |
-          echo "Skipping unsigned iOS package export because this workflow currently publishes Android first when no Apple signing assets are configured."
-          mkdir -p build/ios/ipa
-          printf 'Skipped unsigned iOS packaging: no signing assets configured.\n' > build/ios/ipa/README.txt
+          flutter build ios --release --config-only --no-codesign
+
+          xcodebuild \
+            -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination generic/platform=iOS \
+            -archivePath "$PWD/build/ios/archive/Runner.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            archive
+
+          APP_PATH="$PWD/build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app"
+          mkdir -p build/ios/ipa/Payload
+          cp -R "$APP_PATH" build/ios/ipa/Payload/Runner.app
+          (
+            cd build/ios/ipa
+            ditto -c -k --sequesterRsrc --keepParent Payload "Dumb-Panel-APP-v${BUILD_NAME}-unsigned.ipa"
+          )
 
       - name: Build signed IPA
         if: steps.signing.outputs.mode == 'signed'
