@@ -328,6 +328,7 @@ jobs:
             cd build/ios/ipa
             ditto -c -k --sequesterRsrc --keepParent Payload "Dumb-Panel-APP-v${BUILD_NAME}-unsigned.ipa"
           )
+          rm -rf build/ios/ipa/Payload
 
       - name: Build signed IPA
         if: steps.signing.outputs.mode == 'signed'
@@ -347,7 +348,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ios-package
-          path: build/ios/ipa/*
+          path: build/ios/ipa/*.ipa
           if-no-files-found: error
           retention-days: 7
 
