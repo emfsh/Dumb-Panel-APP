@@ -77,7 +77,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     } catch (_) {}
 
     if (!mounted) return;
-
     if (!widget.skipAutoLogin &&
         _autoLogin &&
         _usernameController.text.isNotEmpty &&
@@ -118,6 +117,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       if (result['two_factor_required'] == true) {
         setState(() {
           _needsTotp = true;
+          _error = result['error']?.toString() ?? '请输入两步验证码';
           _loading = false;
         });
         return;

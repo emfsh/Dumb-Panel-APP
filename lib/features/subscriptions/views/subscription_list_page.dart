@@ -10,6 +10,7 @@ import '../../../core/network/sse_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/subscription.dart';
 import '../../../shared/utils/api_utils.dart';
+import '../../../shared/utils/ansi_text.dart';
 
 // ── Provider ──
 
@@ -1137,17 +1138,24 @@ class _SubscriptionLogsPageState extends ConsumerState<SubscriptionLogsPage> {
                       ),
                     ),
                     child: SingleChildScrollView(
-                      child: SelectableText(
-                        log['content']?.toString().trim().isNotEmpty == true
-                            ? log['content'].toString()
-                            : '(无日志内容)',
-                        style: TextStyle(
-                          color: isLight
-                              ? AppColors.slate700
-                              : const Color(0xFFD4D4D4),
-                          fontFamily: 'monospace',
-                          fontSize: 12,
-                          height: 1.6,
+                      child: SelectionArea(
+                        child: RichText(
+                          text: AnsiTextParser.buildTextSpan(
+                            log['content']?.toString().trim().isNotEmpty == true
+                                ? log['content'].toString()
+                                : '(无日志内容)',
+                            baseStyle: TextStyle(
+                              color: isLight
+                                  ? AppColors.slate700
+                                  : const Color(0xFFD4D4D4),
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                              height: 1.6,
+                            ),
+                            brightness: isLight
+                                ? Brightness.light
+                                : Brightness.dark,
+                          ),
                         ),
                       ),
                     ),
@@ -1423,11 +1431,11 @@ class _SubscriptionPullStreamPageState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('拉取日志'),
-        backgroundColor: const Color(0xFF1E1E1E),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.slate900,
       ),
       body: Column(
         children: [
@@ -1436,20 +1444,25 @@ class _SubscriptionPullStreamPageState
                 ? Center(
                     child: Text(
                       _statusMessage!,
-                      style: const TextStyle(color: Color(0xFFD4D4D4)),
+                      style: const TextStyle(color: AppColors.termText),
                     ),
                   )
                 : ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(12),
                     itemCount: _logs.length,
-                    itemBuilder: (_, i) => Text(
-                      _logs[i],
-                      style: const TextStyle(
-                        color: Color(0xFFD4D4D4),
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                        height: 1.6,
+                    itemBuilder: (_, i) => SelectionArea(
+                      child: RichText(
+                        text: AnsiTextParser.buildTextSpan(
+                          _logs[i],
+                          baseStyle: const TextStyle(
+                            color: AppColors.termText,
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                            height: 1.6,
+                          ),
+                          brightness: Brightness.light,
+                        ),
                       ),
                     ),
                   ),
@@ -1458,7 +1471,7 @@ class _SubscriptionPullStreamPageState
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(12),
-              color: const Color(0xFF252526),
+              color: AppColors.slate100,
               child: const Text(
                 '拉取完成',
                 textAlign: TextAlign.center,

@@ -10,6 +10,7 @@ import '../../../core/network/dio_client.dart';
 import '../../../core/network/sse_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/task.dart';
+import '../../../shared/utils/ansi_text.dart';
 import '../../../shared/utils/api_utils.dart';
 import '../../../shared/widgets/task_cron_list.dart';
 import '../providers/task_provider.dart';
@@ -1463,11 +1464,11 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
         : '运行日志';
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(title),
-        backgroundColor: const Color(0xFF1E1E1E),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.slate900,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 4),
@@ -1493,14 +1494,14 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
         ],
       ),
       body: Container(
-        color: const Color(0xFF1E1E1E),
+        color: AppColors.termBg,
         child: _loading && _lines.isEmpty
             ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
             : _lines.isEmpty
             ? Center(
                 child: Text(
                   _done ? '无日志内容' : '等待日志输出...',
-                  style: const TextStyle(color: Color(0xFFD4D4D4)),
+                  style: const TextStyle(color: AppColors.termText),
                 ),
               )
             : Theme(
@@ -1515,13 +1516,18 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
                   child: SingleChildScrollView(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(12),
-                    child: SelectableText(
-                      _lines.join('\n'),
-                      style: const TextStyle(
-                        color: Color(0xFFD4D4D4),
-                        fontFamily: 'monospace',
-                        fontSize: 12,
-                        height: 1.6,
+                    child: SelectionArea(
+                      child: RichText(
+                        text: AnsiTextParser.buildTextSpan(
+                          _lines.join('\n'),
+                          baseStyle: const TextStyle(
+                            color: AppColors.termText,
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                            height: 1.6,
+                          ),
+                          brightness: Brightness.light,
+                        ),
                       ),
                     ),
                   ),

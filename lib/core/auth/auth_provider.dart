@@ -5,6 +5,8 @@ import 'auth_service.dart';
 
 enum AuthStatus { unknown, unauthenticated, authenticated }
 
+const Object _authFieldUnset = Object();
+
 class AuthState {
   final AuthStatus status;
   final User? user;
@@ -20,15 +22,15 @@ class AuthState {
 
   AuthState copyWith({
     AuthStatus? status,
-    User? user,
+    Object? user = _authFieldUnset,
     bool? needsInit,
-    String? error,
+    Object? error = _authFieldUnset,
   }) {
     return AuthState(
       status: status ?? this.status,
-      user: user ?? this.user,
+      user: identical(user, _authFieldUnset) ? this.user : user as User?,
       needsInit: needsInit ?? this.needsInit,
-      error: error,
+      error: identical(error, _authFieldUnset) ? this.error : error as String?,
     );
   }
 }
@@ -44,26 +46,35 @@ class AuthNotifier extends StateNotifier<AuthState> {
       state = const AuthState(status: AuthStatus.unauthenticated);
       return;
     }
-
-    final cachedUser = await SecureStorage.getUser();
-    state = AuthState(
-      status: AuthStatus.authenticated,
-      user: cachedUser,
-      needsInit: state.needsInit,
-    );
+    state = state.copyWith(status: AuthStatus.unknown, error: null);
   }
 
   Future<void> checkAuthStatus({bool verifyRemote = true}) async {
     await restoreSession();
-    if (!verifyRemote || state.status != AuthStatus.authenticated) {
+    if (!verifyRemote) {
+      return;
+    }
+
+    final token = await SecureStorage.getAccessToken();
+    if (token == null || token.isEmpty) {
+      state = const AuthState(status: AuthStatus.unauthenticated);
       return;
     }
 
     try {
       final user = await _authService.getUser();
-      state = state.copyWith(status: AuthStatus.authenticated, user: user);
+      state = state.copyWith(
+        status: AuthStatus.authenticated,
+        user: user,
+        error: null,
+      );
     } catch (_) {
-      // 启动探活失败时保留本地登录态，等真正的业务请求再决定是否失效。
+      await SecureStorage.clearAuthSession();
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        user: null,
+        error: '登录状态已失效，请重新登录',
+      );
     }
   }
 

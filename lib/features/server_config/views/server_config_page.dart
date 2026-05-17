@@ -51,11 +51,13 @@ class _ServerConfigPageState extends ConsumerState<ServerConfigPage> {
     r'^localhost(:\d+)?$',
   );
 
+  bool _isLocalHttpHost(String hostPart) => _ipPattern.hasMatch(hostPart);
+
   String _normalizeUrl(String rawUrl) {
     var finalUrl = rawUrl.trim();
     if (!finalUrl.startsWith('http')) {
       final hostPart = finalUrl.split('/').first;
-      finalUrl = _ipPattern.hasMatch(hostPart)
+      finalUrl = _isLocalHttpHost(hostPart)
           ? 'http://$finalUrl'
           : 'https://$finalUrl';
     }
@@ -65,14 +67,32 @@ class _ServerConfigPageState extends ConsumerState<ServerConfigPage> {
     return finalUrl;
   }
 
-  String _flipScheme(String url) {
-    if (url.startsWith('https://')) {
-      return 'http://${url.substring(8)}';
+  bool _isExplicitHttpUrl(String url) => url.startsWith('http://');
+
+  bool _isAllowedHttpUrl(String url) {
+    if (!_isExplicitHttpUrl(url)) {
+      return false;
     }
-    if (url.startsWith('http://')) {
-      return 'https://${url.substring(7)}';
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      return false;
     }
-    return url;
+    return _isLocalHttpHost(uri.authority);
+  }
+
+  String _buildConnectError(String finalUrl) {
+    if (_isExplicitHttpUrl(finalUrl)) {
+      return '无法连接到服务器，请确认本地网络地址和端口可访问';
+    }
+    return '无法连接到服务器，请检查地址或确认面板已开启 HTTPS';
+  }
+
+  String _httpSecurityHint(String rawUrl) {
+    final normalized = _normalizeUrl(rawUrl);
+    if (_isExplicitHttpUrl(normalized)) {
+      return '当前使用的是本地 HTTP 地址，请仅在可信局域网中使用。';
+    }
+    return '公网域名建议使用 HTTPS，APP 不会自动切换到不安全的 HTTP。';
   }
 
   void _showMessage(String message) {
@@ -180,21 +200,23 @@ class _ServerConfigPageState extends ConsumerState<ServerConfigPage> {
     });
 
     var finalUrl = _normalizeUrl(_controller.text);
+    if (_isExplicitHttpUrl(finalUrl) && !_isAllowedHttpUrl(finalUrl)) {
+      setState(() {
+        _checking = false;
+        _error = '仅支持局域网 IP 或 localhost 使用 HTTP，请改用 HTTPS 地址';
+      });
+      return;
+    }
+
     final authService = AuthService();
     var ok = await authService.checkHealth(finalUrl);
 
     if (!ok) {
-      final altUrl = _flipScheme(finalUrl);
-      ok = await authService.checkHealth(altUrl);
-      if (ok) {
-        finalUrl = altUrl;
-      } else {
-        setState(() {
-          _checking = false;
-          _error = '无法连接到服务器，已尝试 HTTP 和 HTTPS，请检查地址';
-        });
-        return;
-      }
+      setState(() {
+        _checking = false;
+        _error = _buildConnectError(finalUrl);
+      });
+      return;
     }
 
     final existing = _panels.where((p) => p.url == finalUrl).firstOrNull;
@@ -305,6 +327,14 @@ class _ServerConfigPageState extends ConsumerState<ServerConfigPage> {
                 ),
                 textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 8),
+              Text(
+                '公网域名请使用 HTTPS；HTTP 仅允许局域网 IP 或 localhost。',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
               if (_panels.isNotEmpty) ...[
                 const SizedBox(height: 28),
                 Text('已保存的面板', style: theme.textTheme.titleSmall),
@@ -408,6 +438,15 @@ class _ServerConfigPageState extends ConsumerState<ServerConfigPage> {
                 Text(
                   _error!,
                   style: TextStyle(color: theme.colorScheme.error),
+                  textAlign: TextAlign.center,
+                ),
+              ] else if (_controller.text.trim().isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _httpSecurityHint(_controller.text),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ],

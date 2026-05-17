@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +7,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:local_auth/local_auth.dart';
 
 import '../../../core/storage/secure_storage.dart';
+
+const Object _lockFieldUnset = Object();
+const String _kAppLockHashVersion = 'sha256-iter-v1';
+const int _kAppLockHashRounds = 40000;
 
 class AppLockConfig {
   final bool enabled;
@@ -60,12 +65,18 @@ class AppLockState {
   final bool locked;
   final AppLockConfig config;
   final List<BiometricType> availableBiometrics;
+  final int failedAttempts;
+  final DateTime? lockedUntil;
+  final String? unlockNotice;
 
   const AppLockState({
     this.loading = false,
     this.locked = false,
     this.config = const AppLockConfig(),
     this.availableBiometrics = const [],
+    this.failedAttempts = 0,
+    this.lockedUntil,
+    this.unlockNotice,
   });
 
   bool get biometricAvailable => availableBiometrics.isNotEmpty;
@@ -73,7 +84,6 @@ class AppLockState {
   bool get hasPassword => config.hasPassword;
   bool get hasPattern => config.hasPattern;
   bool get hasBiometric => config.biometricEnabled && biometricAvailable;
-
   String get biometricLabel {
     final hasFace = availableBiometrics.contains(BiometricType.face);
     final hasFingerprint = availableBiometrics.contains(
@@ -90,12 +100,22 @@ class AppLockState {
     bool? locked,
     AppLockConfig? config,
     List<BiometricType>? availableBiometrics,
+    int? failedAttempts,
+    Object? lockedUntil = _lockFieldUnset,
+    Object? unlockNotice = _lockFieldUnset,
   }) {
     return AppLockState(
       loading: loading ?? this.loading,
       locked: locked ?? this.locked,
       config: config ?? this.config,
       availableBiometrics: availableBiometrics ?? this.availableBiometrics,
+      failedAttempts: failedAttempts ?? this.failedAttempts,
+      lockedUntil: identical(lockedUntil, _lockFieldUnset)
+          ? this.lockedUntil
+          : lockedUntil as DateTime?,
+      unlockNotice: identical(unlockNotice, _lockFieldUnset)
+          ? this.unlockNotice
+          : unlockNotice as String?,
     );
   }
 }
@@ -117,6 +137,9 @@ class AppLockController extends StateNotifier<AppLockState> {
       loading: false,
       config: nextConfig,
       availableBiometrics: biometrics,
+      failedAttempts: 0,
+      lockedUntil: null,
+      unlockNotice: null,
     );
     await SecureStorage.saveAppLockConfig(nextConfig.toJson());
   }
@@ -137,7 +160,10 @@ class AppLockController extends StateNotifier<AppLockState> {
 
   Future<void> savePassword(String value) async {
     final nextConfig = _sanitizeConfig(
-      state.config.copyWith(enabled: true, passwordHash: _hashSecret(value)),
+      state.config.copyWith(
+        enabled: true,
+        passwordHash: await _hashSecret(value),
+      ),
       state.availableBiometrics,
     );
     await _saveConfig(nextConfig);
@@ -155,7 +181,7 @@ class AppLockController extends StateNotifier<AppLockState> {
     final nextConfig = _sanitizeConfig(
       state.config.copyWith(
         enabled: true,
-        patternHash: _hashSecret(pattern.join('-')),
+        patternHash: await _hashSecret(pattern.join('-')),
       ),
       state.availableBiometrics,
     );
@@ -183,25 +209,43 @@ class AppLockController extends StateNotifier<AppLockState> {
 
   void lockIfEnabled() {
     if (state.isEnabled) {
-      state = state.copyWith(locked: true);
+      state = state.copyWith(locked: true, unlockNotice: null);
     }
   }
 
   void unlockSession() {
-    state = state.copyWith(locked: false);
+    state = state.copyWith(
+      locked: false,
+      failedAttempts: 0,
+      lockedUntil: null,
+      unlockNotice: null,
+    );
   }
 
   void resetSession() {
-    state = state.copyWith(locked: false);
+    state = state.copyWith(
+      locked: false,
+      failedAttempts: 0,
+      lockedUntil: null,
+      unlockNotice: null,
+    );
   }
 
   Future<bool> unlockWithPassword(String value) async {
     if (!state.hasPassword) {
       return false;
     }
-    final ok = _hashSecret(value) == state.config.passwordHash;
+    final blockedMessage = _ensureUnlockReady();
+    if (blockedMessage != null) {
+      return false;
+    }
+
+    final ok = await _matchesSecret(value, state.config.passwordHash);
     if (ok) {
+      await _upgradeLegacyPasswordIfNeeded(value);
       unlockSession();
+    } else {
+      _recordFailedAttempt('密码不正确');
     }
     return ok;
   }
@@ -210,9 +254,18 @@ class AppLockController extends StateNotifier<AppLockState> {
     if (!state.hasPattern) {
       return false;
     }
-    final ok = _hashSecret(pattern.join('-')) == state.config.patternHash;
+    final blockedMessage = _ensureUnlockReady();
+    if (blockedMessage != null) {
+      return false;
+    }
+
+    final rawPattern = pattern.join('-');
+    final ok = await _matchesSecret(rawPattern, state.config.patternHash);
     if (ok) {
+      await _upgradeLegacyPatternIfNeeded(rawPattern);
       unlockSession();
+    } else {
+      _recordFailedAttempt('图案不正确');
     }
     return ok;
   }
@@ -233,16 +286,26 @@ class AppLockController extends StateNotifier<AppLockState> {
       );
       if (ok) {
         unlockSession();
+      } else {
+        state = state.copyWith(
+          unlockNotice: '${state.biometricLabel}验证未通过',
+        );
       }
       return ok;
     } on PlatformException {
+      state = state.copyWith(unlockNotice: '生物识别暂时不可用，请改用其他方式');
       return false;
     }
   }
 
   Future<void> _saveConfig(AppLockConfig config) async {
     await SecureStorage.saveAppLockConfig(config.toJson());
-    state = state.copyWith(config: config);
+    state = state.copyWith(
+      config: config,
+      failedAttempts: 0,
+      lockedUntil: null,
+      unlockNotice: null,
+    );
   }
 
   Future<List<BiometricType>> _readAvailableBiometrics() async {
@@ -273,9 +336,121 @@ class AppLockController extends StateNotifier<AppLockState> {
     );
   }
 
-  String _hashSecret(String value) {
+  String? _ensureUnlockReady() {
+    final lockedUntil = state.lockedUntil;
+    if (lockedUntil == null) {
+      return null;
+    }
+    if (lockedUntil.isAfter(DateTime.now())) {
+      final seconds = lockedUntil.difference(DateTime.now()).inSeconds + 1;
+      final message = '连续输错过多，请在 ${seconds}s 后重试';
+      state = state.copyWith(unlockNotice: message);
+      return message;
+    }
+    state = state.copyWith(failedAttempts: 0, lockedUntil: null, unlockNotice: null);
+    return null;
+  }
+
+  void _recordFailedAttempt(String fallbackMessage) {
+    final nextAttempts = state.failedAttempts + 1;
+    final cooldown = _cooldownForAttempts(nextAttempts);
+    if (cooldown == null) {
+      state = state.copyWith(
+        failedAttempts: nextAttempts,
+        unlockNotice: fallbackMessage,
+      );
+      return;
+    }
+
+    state = state.copyWith(
+      failedAttempts: nextAttempts,
+      lockedUntil: DateTime.now().add(cooldown),
+      unlockNotice: '连续输错过多，请在 ${cooldown.inSeconds}s 后重试',
+    );
+  }
+
+  Duration? _cooldownForAttempts(int attempts) {
+    if (attempts >= 8) {
+      return const Duration(minutes: 1);
+    }
+    if (attempts >= 5) {
+      return const Duration(seconds: 30);
+    }
+    if (attempts >= 3) {
+      return const Duration(seconds: 10);
+    }
+    return null;
+  }
+
+  Future<void> _upgradeLegacyPasswordIfNeeded(String value) async {
+    if (!_isLegacyHash(state.config.passwordHash)) {
+      return;
+    }
+    await _saveConfig(
+      state.config.copyWith(passwordHash: await _hashSecret(value)),
+    );
+  }
+
+  Future<void> _upgradeLegacyPatternIfNeeded(String value) async {
+    if (!_isLegacyHash(state.config.patternHash)) {
+      return;
+    }
+    await _saveConfig(
+      state.config.copyWith(patternHash: await _hashSecret(value)),
+    );
+  }
+
+  bool _isLegacyHash(String value) => !value.startsWith('$_kAppLockHashVersion:');
+
+  Future<bool> _matchesSecret(String value, String storedHash) async {
+    if (_isLegacyHash(storedHash)) {
+      return _legacyHashSecret(value) == storedHash;
+    }
+
+    final parts = storedHash.split(':');
+    if (parts.length != 4 || parts[0] != _kAppLockHashVersion) {
+      return false;
+    }
+
+    final rounds = int.tryParse(parts[1]);
+    final salt = parts[2];
+    final digest = parts[3];
+    if (rounds == null || rounds <= 0 || salt.isEmpty || digest.isEmpty) {
+      return false;
+    }
+
+    final actualDigest = await _deriveSecret(value, salt, rounds);
+    return actualDigest == digest;
+  }
+
+  Future<String> _hashSecret(String value) async {
+    final salt = _generateSalt();
+    final digest = await _deriveSecret(value, salt, _kAppLockHashRounds);
+    return '$_kAppLockHashVersion:$_kAppLockHashRounds:$salt:$digest';
+  }
+
+  String _legacyHashSecret(String value) {
     final bytes = utf8.encode('daidai_app_lock::$value');
     return sha256.convert(bytes).toString();
+  }
+
+  String _generateSalt() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    return base64UrlEncode(bytes);
+  }
+
+  Future<String> _deriveSecret(String value, String salt, int rounds) async {
+    var current = utf8.encode('$salt::$value');
+    for (var i = 0; i < rounds; i++) {
+      current = sha256.convert(current).bytes;
+      if ((i + 1) % 2000 == 0) {
+        await Future<void>.delayed(Duration.zero);
+      }
+    }
+    return current
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
   }
 }
 

@@ -5,6 +5,7 @@ import '../../../core/network/sse_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/task_log.dart';
 import '../../../shared/utils/api_utils.dart';
+import '../../../shared/utils/ansi_text.dart';
 
 class LogStreamPage extends StatefulWidget {
   final int logId;
@@ -226,13 +227,18 @@ class _LogStreamPageState extends State<LogStreamPage> {
                   child: SingleChildScrollView(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(12),
-                    child: SelectableText(
-                      _lines.join('\n'),
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 13,
-                        color: AppColors.termText,
-                        height: 1.5,
+                    child: SelectionArea(
+                      child: RichText(
+                        text: AnsiTextParser.buildTextSpan(
+                          _lines.join('\n'),
+                          baseStyle: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 13,
+                            color: AppColors.termText,
+                            height: 1.5,
+                          ),
+                          brightness: Brightness.light,
+                        ),
                       ),
                     ),
                   ),

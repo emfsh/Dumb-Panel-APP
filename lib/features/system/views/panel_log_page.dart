@@ -5,6 +5,7 @@ import '../../../core/network/api_endpoints.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/utils/api_utils.dart';
+import '../../../shared/utils/ansi_text.dart';
 
 class PanelLogPage extends StatefulWidget {
   const PanelLogPage({super.key});
@@ -193,13 +194,18 @@ class _PanelLogPageState extends State<PanelLogPage> {
                     )
                   : SingleChildScrollView(
                       padding: const EdgeInsets.all(14),
-                      child: SelectableText(
-                        _content,
-                        style: const TextStyle(
-                          color: AppColors.termText,
-                          fontFamily: 'monospace',
-                          fontSize: 12,
-                          height: 1.55,
+                      child: SelectionArea(
+                        child: RichText(
+                          text: AnsiTextParser.buildTextSpan(
+                            _content,
+                            baseStyle: const TextStyle(
+                              color: AppColors.termText,
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                              height: 1.55,
+                            ),
+                            brightness: Brightness.light,
+                          ),
                         ),
                       ),
                     ),

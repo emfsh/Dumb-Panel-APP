@@ -91,14 +91,16 @@ jobs:
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [[ -n "$KEYSTORE_BASE64" ]]; then
+          if [[ -n "$KEYSTORE_BASE64" && -n "$KEYSTORE_PASSWORD" && -n "$KEY_ALIAS" && -n "$KEY_PASSWORD" ]]; then
             echo "$KEYSTORE_BASE64" | base64 --decode > android/app/daidai-release.jks
             cat > android/key.properties <<EOF
           storeFile=daidai-release.jks
-          storePassword=${KEYSTORE_PASSWORD:-daidai2024}
-          keyAlias=${KEY_ALIAS:-daidai}
-          keyPassword=${KEY_PASSWORD:-daidai2024}
+          storePassword=${KEYSTORE_PASSWORD}
+          keyAlias=${KEY_ALIAS}
+          keyPassword=${KEY_PASSWORD}
           EOF
+          else
+            echo "Android release signing secrets are incomplete, build will proceed without a custom release keystore."
           fi
 
       - name: Resolve Dart packages

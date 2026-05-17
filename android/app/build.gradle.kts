@@ -16,6 +16,24 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+fun resolveSigningValue(propertyKey: String, envKey: String): String? {
+    val propertyValue = keystoreProperties.getProperty(propertyKey)?.trim()
+    if (!propertyValue.isNullOrEmpty()) {
+        return propertyValue
+    }
+    return System.getenv(envKey)?.trim()?.takeIf { it.isNotEmpty() }
+}
+
+val releaseStoreFile = resolveSigningValue("storeFile", "KEYSTORE_FILE")
+val releaseStorePassword = resolveSigningValue("storePassword", "KEYSTORE_PASSWORD")
+val releaseKeyAlias = resolveSigningValue("keyAlias", "KEY_ALIAS")
+val releaseKeyPassword = resolveSigningValue("keyPassword", "KEY_PASSWORD")
+val hasReleaseSigning =
+    !releaseStoreFile.isNullOrEmpty() &&
+        !releaseStorePassword.isNullOrEmpty() &&
+        !releaseKeyAlias.isNullOrEmpty() &&
+        !releaseKeyPassword.isNullOrEmpty()
+
 android {
     namespace = "com.daidai.panel"
     compileSdk = flutter.compileSdkVersion
@@ -40,26 +58,20 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file(
-                keystoreProperties.getProperty("storeFile")
-                    ?: System.getenv("KEYSTORE_FILE")
-                    ?: "daidai-release.jks"
-            )
-            storePassword = keystoreProperties.getProperty("storePassword")
-                ?: System.getenv("KEYSTORE_PASSWORD")
-                ?: "daidai2024"
-            keyAlias = keystoreProperties.getProperty("keyAlias")
-                ?: System.getenv("KEY_ALIAS")
-                ?: "daidai"
-            keyPassword = keystoreProperties.getProperty("keyPassword")
-                ?: System.getenv("KEY_PASSWORD")
-                ?: "daidai2024"
+            if (hasReleaseSigning) {
+                storeFile = file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("release")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             isShrinkResources = false
         }

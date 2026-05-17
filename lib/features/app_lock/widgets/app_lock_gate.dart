@@ -17,15 +17,12 @@ class AppLockGate extends ConsumerStatefulWidget {
   ConsumerState<AppLockGate> createState() => _AppLockGateState();
 }
 
-class _AppLockGateState extends ConsumerState<AppLockGate>
-    with WidgetsBindingObserver {
+class _AppLockGateState extends ConsumerState<AppLockGate> {
   late final ProviderSubscription<AuthStatus> _authSubscription;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
-
     Future.microtask(() async {
       final controller = ref.read(appLockProvider.notifier);
       await controller.initialize();
@@ -51,12 +48,7 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
   @override
   void dispose() {
     _authSubscription.close();
-    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
   }
 
   @override
@@ -159,10 +151,11 @@ class _AppLockOverlayState extends State<_AppLockOverlay> {
     final ok = await widget.controller.unlockWithPassword(
       _passwordController.text.trim(),
     );
+    final notice = widget.controller.state.unlockNotice;
     if (!mounted) return;
     setState(() {
       _submitting = false;
-      _error = ok ? null : '密码不正确';
+      _error = ok ? null : (notice ?? '密码不正确');
       if (ok) {
         _passwordController.clear();
       }
@@ -179,10 +172,11 @@ class _AppLockOverlayState extends State<_AppLockOverlay> {
       _error = null;
     });
     final ok = await widget.controller.unlockWithPattern(_patternPoints);
+    final notice = widget.controller.state.unlockNotice;
     if (!mounted) return;
     setState(() {
       _submitting = false;
-      _error = ok ? null : '图案不正确';
+      _error = ok ? null : (notice ?? '图案不正确');
       if (!ok) {
         _patternPoints = const [];
       }
@@ -195,11 +189,12 @@ class _AppLockOverlayState extends State<_AppLockOverlay> {
       _error = null;
     });
     final ok = await widget.controller.unlockWithBiometric();
+    final notice = widget.controller.state.unlockNotice;
     if (!mounted) return;
     setState(() {
       _submitting = false;
       if (!ok && showFailureMessage) {
-        _error = '${widget.state.biometricLabel}验证未通过';
+        _error = notice ?? '${widget.state.biometricLabel}验证未通过';
       }
     });
   }

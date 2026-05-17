@@ -13,6 +13,7 @@ import '../../../core/network/api_endpoints.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/utils/api_utils.dart';
+import '../../../shared/utils/ansi_text.dart';
 import '../../tasks/views/task_form_page.dart';
 
 final scriptProvider = StateNotifierProvider<ScriptNotifier, ScriptState>((
@@ -1745,7 +1746,7 @@ class _ScriptViewPageState extends ConsumerState<ScriptViewPage> {
             ? Colors.white
             : AppColors.slate900);
     final editorForeground = _useLightForeground(editorBackground)
-        ? const Color(0xFFD4D4D4)
+        ? AppColors.termText
         : AppColors.slate900;
 
     return Scaffold(
@@ -2424,13 +2425,18 @@ class _ScriptDebugRunSheetState extends State<_ScriptDebugRunSheet> {
                               controller: _scrollController,
                               child: SingleChildScrollView(
                                 controller: _scrollController,
-                                child: SelectableText(
-                                  _logs.join('\n'),
-                                  style: const TextStyle(
-                                    color: AppColors.termText,
-                                    fontFamily: 'monospace',
-                                    fontSize: 12,
-                                    height: 1.55,
+                                child: SelectionArea(
+                                  child: RichText(
+                                    text: AnsiTextParser.buildTextSpan(
+                                      _logs.join('\n'),
+                                      baseStyle: const TextStyle(
+                                        color: AppColors.termText,
+                                        fontFamily: 'monospace',
+                                        fontSize: 12,
+                                        height: 1.55,
+                                      ),
+                                      brightness: Brightness.light,
+                                    ),
                                   ),
                                 ),
                               ),

@@ -3,6 +3,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../shared/models/user.dart';
 
+const Object _panelFieldUnset = Object();
+
 /// 面板配置信息
 class PanelConfig {
   final String url;
@@ -42,20 +44,26 @@ class PanelConfig {
   PanelConfig copyWith({
     String? url,
     String? name,
-    String? username,
-    String? password,
+    Object? username = _panelFieldUnset,
+    Object? password = _panelFieldUnset,
     bool? rememberPassword,
     bool? autoLogin,
   }) {
     return PanelConfig(
       url: url ?? this.url,
       name: name ?? this.name,
-      username: username ?? this.username,
-      password: password ?? this.password,
+      username: identical(username, _panelFieldUnset)
+          ? this.username
+          : username as String?,
+      password: identical(password, _panelFieldUnset)
+          ? this.password
+          : password as String?,
       rememberPassword: rememberPassword ?? this.rememberPassword,
       autoLogin: autoLogin ?? this.autoLogin,
     );
   }
+
+  PanelConfig sanitizedForStorage() => this;
 }
 
 class SecureStorage {
@@ -169,7 +177,8 @@ class SecureStorage {
 
   // Panels
   static Future<void> savePanels(List<PanelConfig> panels) async {
-    final json = panels.map((p) => jsonEncode(p.toJson())).toList();
+    final sanitized = panels.map((p) => p.sanitizedForStorage()).toList();
+    final json = sanitized.map((p) => jsonEncode(p.toJson())).toList();
     await _storage.write(key: _panelsKey, value: jsonEncode(json));
   }
 
@@ -189,9 +198,12 @@ class SecureStorage {
     }
     try {
       final list = jsonDecode(raw) as List;
-      return list
+      final panels = list
           .map((e) => PanelConfig.fromJson(jsonDecode(e as String)))
+          .map((panel) => panel.sanitizedForStorage())
           .toList();
+      await savePanels(panels);
+      return panels;
     } catch (_) {
       return [];
     }
@@ -199,11 +211,12 @@ class SecureStorage {
 
   static Future<void> savePanel(PanelConfig panel) async {
     final panels = await getPanels();
-    final idx = panels.indexWhere((p) => p.url == panel.url);
+    final sanitized = panel.sanitizedForStorage();
+    final idx = panels.indexWhere((p) => p.url == sanitized.url);
     if (idx >= 0) {
-      panels[idx] = panel;
+      panels[idx] = sanitized;
     } else {
-      panels.insert(0, panel);
+      panels.insert(0, sanitized);
     }
     await savePanels(panels);
   }

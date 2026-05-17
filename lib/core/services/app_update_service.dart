@@ -10,13 +10,27 @@ import '../network/app_user_agent.dart';
 import '../theme/app_theme.dart';
 
 const _kGitHubRepo = 'linzixuanzz/Dumb-Panel-APP';
-const _kGitHubMirror = 'https://gh.301.ee/';
+const _kGitHubDownloadHost = 'github.com';
+const _kGitHubReleaseHost = 'objects.githubusercontent.com';
+const _kGitHubAssetHost = 'githubusercontent.com';
+
+bool _isTrustedDownloadUrl(String rawUrl) {
+  final uri = Uri.tryParse(rawUrl);
+  if (uri == null || uri.scheme != 'https') {
+    return false;
+  }
+  final host = uri.host.toLowerCase();
+  return host == _kGitHubDownloadHost ||
+      host == _kGitHubReleaseHost ||
+      host.endsWith('.$_kGitHubAssetHost');
+}
 
 class AppUpdateInfo {
   final String latestVersion;
   final String currentVersion;
   final String releaseNotes;
   final String downloadUrl;
+  final String assetName;
   final bool hasUpdate;
 
   const AppUpdateInfo({
@@ -24,6 +38,7 @@ class AppUpdateInfo {
     required this.currentVersion,
     required this.releaseNotes,
     required this.downloadUrl,
+    required this.assetName,
     required this.hasUpdate,
   });
 }
@@ -34,6 +49,7 @@ class AppUpdateService {
   static final _dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 10),
     receiveTimeout: const Duration(seconds: 10),
+    validateStatus: (status) => status != null && status < 400,
   ));
 
   static const _platform = MethodChannel('com.daidai.panel/app_install');
@@ -53,13 +69,17 @@ class AppUpdateService {
       final assets = data['assets'];
 
       String apkUrl = '';
+      String assetName = '';
       if (assets is List) {
         for (final asset in assets) {
           final name = asset['name']?.toString() ?? '';
           if (name.endsWith('.apk')) {
             final rawUrl = asset['browser_download_url']?.toString() ?? '';
-            apkUrl = rawUrl.isNotEmpty ? '$_kGitHubMirror$rawUrl' : '';
-            break;
+            if (_isTrustedDownloadUrl(rawUrl)) {
+              apkUrl = rawUrl;
+              assetName = name;
+              break;
+            }
           }
         }
       }
@@ -72,6 +92,7 @@ class AppUpdateService {
         currentVersion: currentVersion,
         releaseNotes: body,
         downloadUrl: apkUrl,
+        assetName: assetName,
         hasUpdate: hasUpdate,
       );
     } catch (_) {
@@ -99,15 +120,28 @@ class AppUpdateService {
   /// Download APK and install it.
   static Future<void> downloadAndInstall(
     String url,
+    String assetName,
     ValueChanged<double> onProgress,
     VoidCallback onDone,
     ValueChanged<String> onError,
   ) async {
     try {
-      final dir = await getTemporaryDirectory();
-      final filePath = '${dir.path}/daidai_update.apk';
+      if (!_isTrustedDownloadUrl(url)) {
+        throw const FormatException('更新地址不可信，已拒绝下载');
+      }
 
-      await _dio.download(
+      final dir = await getTemporaryDirectory();
+      final safeName = assetName.trim().isEmpty
+          ? 'daidai_update.apk'
+          : assetName.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+      final filePath = '${dir.path}/$safeName';
+
+      final existingFile = File(filePath);
+      if (await existingFile.exists()) {
+        await existingFile.delete();
+      }
+
+      final response = await _dio.download(
         url,
         filePath,
         onReceiveProgress: (received, total) {
@@ -117,12 +151,21 @@ class AppUpdateService {
         },
         options: Options(receiveTimeout: const Duration(minutes: 10)),
       );
+      final finalHost = response.realUri.host.toLowerCase();
+      if (!(_isTrustedDownloadUrl(response.realUri.toString()) ||
+          finalHost == _kGitHubReleaseHost ||
+          finalHost.endsWith('.$_kGitHubAssetHost'))) {
+        throw const FormatException('更新资源跳转到了不受信任的来源');
+      }
 
       onDone();
 
       // Trigger Android system install
       if (Platform.isAndroid) {
-        await _platform.invokeMethod('installApk', {'path': filePath});
+        await _platform.invokeMethod('installApk', {
+          'path': filePath,
+          'sourceHost': Uri.parse(url).host.toLowerCase(),
+        });
       }
     } catch (e) {
       onError(e.toString());
@@ -175,6 +218,7 @@ class _UpdateDialogState extends State<_UpdateDialog> {
 
     AppUpdateService.downloadAndInstall(
       widget.info.downloadUrl,
+      widget.info.assetName,
       (p) {
         if (mounted) setState(() => _progress = p);
       },
@@ -272,6 +316,18 @@ class _UpdateDialogState extends State<_UpdateDialog> {
             Text(
               _error!,
               style: const TextStyle(fontSize: 12, color: AppColors.red500),
+            ),
+          ] else ...[
+            const SizedBox(height: 12),
+            Text(
+              '更新包将直接从 GitHub Release 官方地址下载，并校验为当前应用包名后再触发安装。',
+              style: TextStyle(
+                fontSize: 12,
+                color: widget.isLight
+                    ? AppColors.slate600
+                    : AppColors.slate300,
+                height: 1.4,
+              ),
             ),
           ],
         ],

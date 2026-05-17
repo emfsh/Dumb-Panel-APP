@@ -34,9 +34,9 @@ class AppColors {
   static const amber500 = Color(0xFFF59E0B);
 
   // 日志终端
-  static const termBg = Color(0xFF0F172A); // slate-900
+  static const termBg = Colors.white;
   static const termBgDark = Color(0xFF000000);
-  static const termText = Color(0xFF94A3B8); // slate-400
+  static const termText = Color(0xFF0F172A); // slate-900
   static const termBlue = Color(0xFF60A5FA); // blue-400
   static const termGreen = Color(0xFF34D399); // emerald-400
   static const termRed = Color(0xFFF87171); // red-400

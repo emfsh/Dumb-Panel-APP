@@ -29,9 +29,9 @@ void main() async {
     ),
   );
 
-  // 尝试自动登录
+  // 恢复登录状态时必须向服务端校验，避免本地残留 token 误判为已登录。
   if (serverUrl != null && serverUrl.isNotEmpty) {
-    await container.read(authProvider.notifier).restoreSession();
+    await container.read(authProvider.notifier).checkAuthStatus();
   }
 
   runApp(

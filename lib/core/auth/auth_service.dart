@@ -61,7 +61,13 @@ class AuthService {
       data['totp_code'] = totpCode;
     }
 
-    final response = await _dio.post(ApiEndpoints.login, data: data);
+    final response = await _dio.post(
+      ApiEndpoints.login,
+      data: data,
+      options: Options(
+        validateStatus: (status) => status != null && status < 500,
+      ),
+    );
     final result = _extractData(response.data);
     final Map<String, dynamic> map = result is Map<String, dynamic>
         ? result

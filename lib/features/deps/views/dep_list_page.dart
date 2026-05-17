@@ -8,6 +8,7 @@ import '../../../core/network/sse_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/dependency.dart';
 import '../../../shared/utils/api_utils.dart';
+import '../../../shared/utils/ansi_text.dart';
 
 // ── Provider ──
 
@@ -1200,11 +1201,11 @@ class _DepLogStreamPageState extends ConsumerState<DepLogStreamPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('安装日志'),
-        backgroundColor: const Color(0xFF1E1E1E),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.slate900,
       ),
       body: Column(
         children: [
@@ -1213,13 +1214,18 @@ class _DepLogStreamPageState extends ConsumerState<DepLogStreamPage> {
               controller: _scrollController,
               padding: const EdgeInsets.all(12),
               itemCount: _logs.length,
-              itemBuilder: (_, i) => Text(
-                _logs[i],
-                style: const TextStyle(
-                  color: Color(0xFFD4D4D4),
-                  fontFamily: 'monospace',
-                  fontSize: 12,
-                  height: 1.6,
+              itemBuilder: (_, i) => SelectionArea(
+                child: RichText(
+                  text: AnsiTextParser.buildTextSpan(
+                    _logs[i],
+                    baseStyle: const TextStyle(
+                      color: AppColors.termText,
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      height: 1.6,
+                    ),
+                    brightness: Brightness.light,
+                  ),
                 ),
               ),
             ),
