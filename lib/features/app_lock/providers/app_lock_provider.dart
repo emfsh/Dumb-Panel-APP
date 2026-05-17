@@ -441,7 +441,7 @@ class AppLockController extends StateNotifier<AppLockState> {
   }
 
   Future<String> _deriveSecret(String value, String salt, int rounds) async {
-    var current = utf8.encode('$salt::$value');
+    List<int> current = utf8.encode('$salt::$value');
     for (var i = 0; i < rounds; i++) {
       current = sha256.convert(current).bytes;
       if ((i + 1) % 2000 == 0) {
