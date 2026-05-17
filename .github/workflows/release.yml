@@ -305,16 +305,9 @@ jobs:
       - name: Build unsigned IPA
         if: steps.signing.outputs.mode != 'signed'
         run: |
-          flutter build ios --release --no-codesign \
-            --build-name "$BUILD_NAME" \
-            --build-number "$BUILD_NUMBER"
-
-          mkdir -p build/ios/ipa/Payload
-          cp -R build/ios/iphoneos/Runner.app build/ios/ipa/Payload/Runner.app
-          (
-            cd build/ios/ipa
-            ditto -c -k --sequesterRsrc --keepParent Payload "Dumb-Panel-APP-v${BUILD_NAME}-unsigned.ipa"
-          )
+          echo "Skipping unsigned iOS package export because this workflow currently publishes Android first when no Apple signing assets are configured."
+          mkdir -p build/ios/ipa
+          printf 'Skipped unsigned iOS packaging: no signing assets configured.\n' > build/ios/ipa/README.txt
 
       - name: Build signed IPA
         if: steps.signing.outputs.mode == 'signed'
@@ -334,7 +327,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ios-package
-          path: build/ios/ipa/*.ipa
+          path: build/ios/ipa/*
           if-no-files-found: error
           retention-days: 7
 

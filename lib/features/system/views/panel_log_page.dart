@@ -40,19 +40,17 @@ class _PanelLogPageState extends State<PanelLogPage> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final responses = await Future.wait([
-        DioClient.instance.dio.get(
-          ApiEndpoints.panelLog,
-          queryParameters: {
-            if (_selectedLevel.trim().isNotEmpty) 'level': _selectedLevel.trim(),
-            if (_keywordController.text.trim().isNotEmpty)
-              'keyword': _keywordController.text.trim(),
-            'lines': int.tryParse(_linesController.text.trim()) ?? 300,
-          },
-        ),
-        loadPanelLogBackgroundColor(),
-      ]);
-      final data = extractData(responses[0].data);
+      final logResponse = await DioClient.instance.dio.get(
+        ApiEndpoints.panelLog,
+        queryParameters: {
+          if (_selectedLevel.trim().isNotEmpty) 'level': _selectedLevel.trim(),
+          if (_keywordController.text.trim().isNotEmpty)
+            'keyword': _keywordController.text.trim(),
+          'lines': int.tryParse(_linesController.text.trim()) ?? 300,
+        },
+      );
+      final backgroundColor = await loadPanelLogBackgroundColor();
+      final data = extractData(logResponse.data);
       if (!mounted) {
         return;
       }
@@ -70,7 +68,7 @@ class _PanelLogPageState extends State<PanelLogPage> {
         } else {
           _content = data?.toString() ?? '';
         }
-        _logBackgroundColor = responses[1] as Color?;
+        _logBackgroundColor = backgroundColor;
         _loading = false;
       });
     } catch (error) {

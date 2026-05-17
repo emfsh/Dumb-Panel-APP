@@ -367,7 +367,7 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                         physics: const AlwaysScrollableScrollPhysics(),
                         children: [_buildEmpty()],
                       )
-                    : ListView.builder(
+                    : ListView(
                         controller: _scrollController,
                         physics: const AlwaysScrollableScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
