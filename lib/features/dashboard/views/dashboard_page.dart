@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/auth/auth_provider.dart';
 import '../../../core/services/app_update_service.dart';
+import '../../../core/storage/secure_storage.dart';
 import '../../../core/theme/app_theme.dart';
 import '../providers/dashboard_provider.dart';
 import '../widgets/task_stats_card.dart';
@@ -16,9 +17,14 @@ class DashboardPage extends ConsumerStatefulWidget {
 }
 
 class _DashboardPageState extends ConsumerState<DashboardPage> {
+  String? _serverUrl;
+
   @override
   void initState() {
     super.initState();
+    SecureStorage.getServerUrl().then((url) {
+      if (mounted) setState(() => _serverUrl = url);
+    });
     Future.microtask(() async {
       await ref.read(dashboardProvider.notifier).load();
       if (ref.read(authProvider).user == null) {
@@ -26,6 +32,14 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       }
       _silentUpdateCheck();
     });
+  }
+
+  String? _buildAvatarUrl(String? avatarPath) {
+    if (avatarPath == null || avatarPath.isEmpty || _serverUrl == null) {
+      return null;
+    }
+    if (avatarPath.startsWith('http')) return avatarPath;
+    return '$_serverUrl$avatarPath';
   }
 
   Future<void> _silentUpdateCheck() async {
@@ -37,6 +51,58 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     } catch (_) {
       // Silent — do not disturb user on failure
     }
+  }
+
+  Widget _buildDashboardAvatar(AuthState auth, bool isLight, double size) {
+    final avatarFullUrl = _buildAvatarUrl(auth.user?.avatarUrl);
+    if (avatarFullUrl != null) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: isLight ? AppColors.slate200 : AppColors.slate800,
+          ),
+        ),
+        child: ClipOval(
+          child: Image.network(
+            avatarFullUrl,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _buildFallbackAvatar(auth, isLight, size),
+          ),
+        ),
+      );
+    }
+    return _buildFallbackAvatar(auth, isLight, size);
+  }
+
+  Widget _buildFallbackAvatar(AuthState auth, bool isLight, double size) {
+    final username = auth.user?.username ?? '';
+    final initial = username.isNotEmpty ? username.substring(0, 1).toUpperCase() : '?';
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: AppColors.primary.withAlpha(25),
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: isLight ? AppColors.slate200 : AppColors.slate800,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: TextStyle(
+            fontSize: size * 0.4,
+            fontWeight: FontWeight.w700,
+            color: AppColors.primary,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -162,24 +228,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: isLight ? Colors.white : AppColors.slate900,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isLight
-                                ? AppColors.slate200
-                                : AppColors.slate800,
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.notifications_none,
-                          size: 20,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
+                      _buildDashboardAvatar(auth, isLight, 40),
                     ],
                   ),
                   const SizedBox(height: 20),

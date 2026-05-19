@@ -3,6 +3,7 @@ class User {
   final String username;
   final String role;
   final bool enabled;
+  final String? avatarUrl;
   final DateTime? lastLoginAt;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -12,6 +13,7 @@ class User {
     required this.username,
     required this.role,
     required this.enabled,
+    this.avatarUrl,
     this.lastLoginAt,
     required this.createdAt,
     required this.updatedAt,
@@ -27,11 +29,13 @@ class User {
   }
 
   factory User.fromJson(Map<String, dynamic> json) {
+    final rawAvatar = json['avatar_url']?.toString();
     return User(
       id: (json['id'] as num).toInt(),
       username: json['username'] as String,
       role: json['role'] as String? ?? 'viewer',
       enabled: json['enabled'] as bool? ?? true,
+      avatarUrl: (rawAvatar != null && rawAvatar.isNotEmpty) ? rawAvatar : null,
       lastLoginAt: _parseDate(json['last_login_at']),
       createdAt: _parseDate(json['created_at']) ?? DateTime.now(),
       updatedAt: _parseDate(json['updated_at']) ?? DateTime.now(),
@@ -43,6 +47,7 @@ class User {
     'username': username,
     'role': role,
     'enabled': enabled,
+    'avatar_url': avatarUrl,
   };
 }
 

@@ -90,9 +90,9 @@ class _ServerConfigPageState extends ConsumerState<ServerConfigPage> {
   String _httpSecurityHint(String rawUrl) {
     final normalized = _normalizeUrl(rawUrl);
     if (_isExplicitHttpUrl(normalized)) {
-      return '当前使用的是本地 HTTP 地址，请仅在可信局域网中使用。';
+      return '当前使用 HTTP 连接，数据传输未加密，请在可信网络中使用。';
     }
-    return '公网域名建议使用 HTTPS，APP 不会自动切换到不安全的 HTTP。';
+    return '公网域名建议使用 HTTPS 以保证数据安全。';
   }
 
   void _showMessage(String message) {
@@ -201,11 +201,29 @@ class _ServerConfigPageState extends ConsumerState<ServerConfigPage> {
 
     var finalUrl = _normalizeUrl(_controller.text);
     if (_isExplicitHttpUrl(finalUrl) && !_isAllowedHttpUrl(finalUrl)) {
-      setState(() {
-        _checking = false;
-        _error = '仅支持局域网 IP 或 localhost 使用 HTTP，请改用 HTTPS 地址';
-      });
-      return;
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (dialogCtx) => AlertDialog(
+          title: const Text('安全提示'),
+          content: const Text(
+            '当前使用 HTTP 连接，数据传输未加密。\n建议仅在可信网络中使用，确认继续？',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogCtx, true),
+              child: const Text('继续连接'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) {
+        setState(() => _checking = false);
+        return;
+      }
     }
 
     final authService = AuthService();
@@ -329,7 +347,7 @@ class _ServerConfigPageState extends ConsumerState<ServerConfigPage> {
               ),
               const SizedBox(height: 8),
               Text(
-                '公网域名请使用 HTTPS；HTTP 仅允许局域网 IP 或 localhost。',
+                '建议使用 HTTPS；HTTP 连接需确认安全后方可使用。',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),

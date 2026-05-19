@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -1650,6 +1651,17 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
               visualDensity: VisualDensity.compact,
             ),
           ),
+          if (_lines.isNotEmpty)
+            IconButton(
+              icon: Icon(Icons.copy, color: logTheme.foreground),
+              tooltip: '复制全部',
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: _lines.join('\n')));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('日志已复制到剪贴板'), duration: Duration(seconds: 2)),
+                );
+              },
+            ),
           IconButton(
             icon: Icon(
               _autoScroll ? Icons.vertical_align_bottom : Icons.pause,
@@ -1688,19 +1700,22 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
                   child: SingleChildScrollView(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(12),
-                    child: SelectionArea(
-                      child: RichText(
-                        text: AnsiTextParser.buildTextSpan(
-                          _lines.join('\n'),
-                          baseStyle: TextStyle(
-                            color: logTheme.foreground,
-                            fontFamily: 'monospace',
-                            fontSize: 12,
-                            height: 1.6,
-                          ),
-                          brightness: logTheme.brightness,
+                    child: SelectableText.rich(
+                      AnsiTextParser.buildTextSpan(
+                        _lines.join('\n'),
+                        baseStyle: TextStyle(
+                          color: logTheme.foreground,
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                          height: 1.6,
                         ),
+                        brightness: logTheme.brightness,
                       ),
+                      contextMenuBuilder: (context, editableTextState) {
+                        return AdaptiveTextSelectionToolbar.editableText(
+                          editableTextState: editableTextState,
+                        );
+                      },
                     ),
                   ),
                 ),

@@ -63,6 +63,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         if (isAuth && !manualServerConfig && !manageServerConfig) {
           return '/dashboard';
         }
+        if (!isAuth &&
+            !manualServerConfig &&
+            !manageServerConfig &&
+            authState.status == AuthStatus.unauthenticated) {
+          return '/login';
+        }
         return null;
       }
       if (!isAuth && !isLoginRoute) return '/login';

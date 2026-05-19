@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../core/auth/auth_provider.dart';
+import '../../../core/network/dio_client.dart';
 import '../../../core/services/app_update_service.dart';
+import '../../../core/storage/secure_storage.dart';
 import '../../../core/theme/app_theme.dart';
 
 class MorePage extends ConsumerStatefulWidget {
@@ -16,6 +18,26 @@ class MorePage extends ConsumerStatefulWidget {
 class _MorePageState extends ConsumerState<MorePage> {
   AppUpdateInfo? _updateInfo;
   bool _checking = false;
+  String? _serverUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadServerUrl();
+  }
+
+  Future<void> _loadServerUrl() async {
+    final url = await SecureStorage.getServerUrl();
+    if (mounted) setState(() => _serverUrl = url);
+  }
+
+  String? _buildAvatarUrl(String? avatarPath) {
+    if (avatarPath == null || avatarPath.isEmpty || _serverUrl == null) {
+      return null;
+    }
+    if (avatarPath.startsWith('http')) return avatarPath;
+    return '$_serverUrl$avatarPath';
+  }
 
   Future<void> _checkUpdate({bool silent = false}) async {
     if (_checking) return;
@@ -80,49 +102,58 @@ class _MorePageState extends ConsumerState<MorePage> {
                   color: isLight ? AppColors.slate200 : AppColors.slate800,
                 ),
               ),
-              child: Row(
+              child: Column(
                 children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withAlpha(25),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Text(
-                        user.username.substring(0, 1).toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  Row(
                     children: [
-                      Text(
-                        user.username,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        user.role.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isLight
-                              ? AppColors.slate500
-                              : AppColors.slate400,
+                      _buildUserAvatar(user, 48),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              user.username,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              user.role.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isLight
+                                    ? AppColors.slate500
+                                    : AppColors.slate400,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
+                  if (_serverUrl != null) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Icon(Icons.link, size: 14, color: isLight ? AppColors.slate400 : AppColors.slate500),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            _serverUrl!.replaceAll('http://', '').replaceAll('https://', ''),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isLight ? AppColors.slate500 : AppColors.slate400,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -281,6 +312,57 @@ class _MorePageState extends ConsumerState<MorePage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildUserAvatar(dynamic user, double size) {
+    final avatarFullUrl = _buildAvatarUrl(user.avatarUrl);
+    if (avatarFullUrl != null) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: AppColors.primary.withAlpha(40), width: 2),
+        ),
+        child: ClipOval(
+          child: Image.network(
+            avatarFullUrl,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            headers: {
+              'Authorization': 'Bearer ${DioClient.instance.dio.options.headers['Authorization']?.toString().replaceFirst('Bearer ', '') ?? ''}',
+            },
+            errorBuilder: (_, __, ___) => _buildFallbackAvatar(user, size),
+          ),
+        ),
+      );
+    }
+    return _buildFallbackAvatar(user, size);
+  }
+
+  Widget _buildFallbackAvatar(dynamic user, double size) {
+    final initial = user.username.isNotEmpty
+        ? user.username.substring(0, 1).toUpperCase()
+        : '?';
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: AppColors.primary.withAlpha(25),
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: TextStyle(
+            fontSize: size * 0.38,
+            fontWeight: FontWeight.w700,
+            color: AppColors.primary,
+          ),
+        ),
       ),
     );
   }
