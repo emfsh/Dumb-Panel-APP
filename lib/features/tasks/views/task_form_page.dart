@@ -84,6 +84,7 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
   final List<String> _labels = [];
   List<_TaskNotificationChannel> _notificationChannels = const [];
   bool _showHooks = false;
+  List<String> _knownGroups = const [];
 
   bool get isEditing => widget.task != null;
 
@@ -114,11 +115,16 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
     _notifyOnSuccess = task?.notifyOnSuccess ?? false;
     _allowMultipleInstances = task?.allowMultipleInstances ?? false;
     _notificationChannelId = task?.notificationChannelId;
-    _labels..clear()..addAll(task?.labelList ?? const []);
+    _labels..clear()..addAll(task?.userLabelsForDisplay ?? const []);
     _randomDelayMode = _resolveRandomDelayMode(task?.randomDelaySeconds);
     _showHooks = _taskBeforeC.text.isNotEmpty || _taskAfterC.text.isNotEmpty;
 
-    Future.microtask(_loadNotificationChannels);
+    Future.microtask(() async {
+      await Future.wait([
+        _loadNotificationChannels(),
+        _loadKnownGroups(),
+      ]);
+    });
   }
 
   @override
@@ -149,6 +155,26 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
     } catch (_) {
       if (mounted) setState(() => _loadingChannels = false);
     }
+  }
+
+  Future<void> _loadKnownGroups() async {
+    try {
+      final response = await DioClient.instance.dio.get(
+        ApiEndpoints.tasks,
+        queryParameters: {'page': 1, 'page_size': 200},
+      );
+      final paginated = extractPaginated(response.data);
+      final groups = paginated.items
+          .map((item) => Task.fromJson(item).groupName?.trim() ?? '')
+          .where((group) => group.isNotEmpty)
+          .toSet()
+          .toList()
+        ..sort();
+      if (!mounted) {
+        return;
+      }
+      setState(() => _knownGroups = groups);
+    } catch (_) {}
   }
 
   void _addLabel() {
@@ -336,12 +362,9 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
                 ],
                 if (_labels.isNotEmpty || true) ...[
                   const SizedBox(height: 12),
-                  TextFormField(
+                  _buildGroupAutocomplete(
                     controller: _groupC,
-                    decoration: const InputDecoration(
-                      labelText: '任务分组',
-                      hintText: '例如 中国联通 / 京东 / 日常',
-                    ),
+                    options: _knownGroups,
                   ),
                   const SizedBox(height: 12),
                   Wrap(
@@ -536,6 +559,72 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildGroupAutocomplete({
+    required TextEditingController controller,
+    required List<String> options,
+  }) {
+    return Autocomplete<String>(
+      optionsBuilder: (textEditingValue) {
+        final keyword = textEditingValue.text.trim().toLowerCase();
+        if (keyword.isEmpty) {
+          return options;
+        }
+        return options.where(
+          (group) => group.toLowerCase().contains(keyword),
+        );
+      },
+      onSelected: (value) => controller.text = value,
+      fieldViewBuilder:
+          (context, textEditingController, focusNode, onSubmitted) {
+        textEditingController.value = controller.value;
+        textEditingController.addListener(() {
+          controller.value = textEditingController.value;
+        });
+        return TextField(
+          controller: textEditingController,
+          focusNode: focusNode,
+          decoration: const InputDecoration(
+            labelText: '任务分组',
+            hintText: '可选已有分组或直接输入',
+          ),
+          onSubmitted: (_) => onSubmitted(),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, autocompleteOptions) {
+        final items = autocompleteOptions.toList(growable: false);
+        if (items.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            borderRadius: BorderRadius.circular(12),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxHeight: 220,
+                maxWidth: 280,
+              ),
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                shrinkWrap: true,
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final group = items[index];
+                  return ListTile(
+                    dense: true,
+                    title: Text(group),
+                    onTap: () => onSelected(group),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

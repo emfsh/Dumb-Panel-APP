@@ -55,20 +55,12 @@ class TaskListState {
 class TaskNotifier extends StateNotifier<TaskListState> {
   TaskNotifier() : super(const TaskListState());
 
-  int _page = 1;
-  static const _pageSize = 20;
-
   Future<void> load({bool refresh = false}) async {
-    if (refresh) {
-      _page = 1;
-    }
-
     state = state.copyWith(loading: true, error: null);
     try {
       final dio = DioClient.instance.dio;
       final queryParams = <String, dynamic>{
-        'page': _page,
-        'page_size': _pageSize,
+        'all': 1,
       };
       if (state.keyword.isNotEmpty) {
         queryParams['keyword'] = state.keyword;
@@ -89,7 +81,7 @@ class TaskNotifier extends StateNotifier<TaskListState> {
       final total = paginated.total;
 
       state = state.copyWith(
-        tasks: refresh ? items : [...state.tasks, ...items],
+        tasks: items,
         total: total,
         loading: false,
       );
@@ -99,11 +91,7 @@ class TaskNotifier extends StateNotifier<TaskListState> {
   }
 
   Future<void> loadMore() async {
-    if (state.loading || state.tasks.length >= state.total) {
-      return;
-    }
-    _page++;
-    await load();
+    return;
   }
 
   void setKeyword(String keyword) {

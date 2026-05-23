@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/storage/secure_storage.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/utils/api_utils.dart';
 import '../../../shared/utils/ansi_text.dart';
@@ -28,6 +29,7 @@ enum _ScriptAction { upload, createFile, createDirectory }
 enum _ScriptEntryAction {
   open,
   addToTask,
+  favorite,
   rename,
   delete,
   versions,
@@ -380,12 +382,26 @@ class ScriptListPage extends ConsumerStatefulWidget {
 }
 
 class _ScriptListPageState extends ConsumerState<ScriptListPage> {
+  static const _favoriteScriptsStorageKey = 'scripts.favorite_paths';
   final _searchController = TextEditingController();
+  final Set<String> _favoriteScriptPaths = <String>{};
 
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => ref.read(scriptProvider.notifier).loadTree());
+    Future.microtask(() async {
+      final favorites = await SecureStorage.getUiStateList(
+        _favoriteScriptsStorageKey,
+      );
+      if (mounted) {
+        setState(() {
+          _favoriteScriptPaths
+            ..clear()
+            ..addAll(favorites);
+        });
+      }
+      await ref.read(scriptProvider.notifier).loadTree();
+    });
   }
 
   @override
@@ -412,6 +428,30 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
       return;
     }
     context.push('/scripts/view', extra: path);
+  }
+
+  Future<void> _persistFavoriteScripts() {
+    return SecureStorage.saveUiStateList(
+      _favoriteScriptsStorageKey,
+      _favoriteScriptPaths.toList(),
+    );
+  }
+
+  Future<void> _toggleFavoriteScript(ScriptFile file) async {
+    setState(() {
+      if (_favoriteScriptPaths.contains(file.path)) {
+        _favoriteScriptPaths.remove(file.path);
+      } else {
+        _favoriteScriptPaths.add(file.path);
+      }
+    });
+    await _persistFavoriteScripts();
+    if (!mounted) {
+      return;
+    }
+    _showMessage(
+      _favoriteScriptPaths.contains(file.path) ? '已置顶脚本' : '已取消置顶脚本',
+    );
   }
 
   List<ScriptFile> _filterTree(List<ScriptFile> nodes, String keyword) {
@@ -484,7 +524,7 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
   Widget build(BuildContext context) {
     final state = ref.watch(scriptProvider);
     final isLight = Theme.of(context).brightness == Brightness.light;
-    final visibleTree = _filterTree(state.tree, state.keyword);
+    final visibleTree = _sortScriptTree(_filterTree(state.tree, state.keyword));
 
     return Scaffold(
       body: Padding(
@@ -716,6 +756,19 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
               ),
             if (!file.isDirectory)
               ListTile(
+                leading: Icon(
+                  _favoriteScriptPaths.contains(file.path)
+                      ? Icons.push_pin_outlined
+                      : Icons.push_pin,
+                ),
+                title: Text(
+                  _favoriteScriptPaths.contains(file.path) ? '取消置顶' : '置顶到前面',
+                ),
+                onTap: () =>
+                    Navigator.pop(sheetContext, _ScriptEntryAction.favorite),
+              ),
+            if (!file.isDirectory)
+              ListTile(
                 leading: const Icon(Icons.history_outlined),
                 title: const Text('版本历史'),
                 onTap: () =>
@@ -780,6 +833,9 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
       case _ScriptEntryAction.addToTask:
         await _navigateToTaskWithScript(file.path);
         return;
+      case _ScriptEntryAction.favorite:
+        await _toggleFavoriteScript(file);
+        return;
       case _ScriptEntryAction.rename:
         await _showRenameDialog(file);
         return;
@@ -799,6 +855,33 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
         await _showCreateDirectoryDialog(state, initialParent: file.path);
         return;
     }
+  }
+
+  List<ScriptFile> _sortScriptTree(List<ScriptFile> nodes) {
+    final items = nodes
+        .map(
+          (node) => ScriptFile(
+            name: node.name,
+            path: node.path,
+            isDirectory: node.isDirectory,
+            children: _sortScriptTree(node.children),
+          ),
+        )
+        .toList();
+
+    items.sort((a, b) {
+      if (a.isDirectory != b.isDirectory) {
+        return a.isDirectory ? -1 : 1;
+      }
+      final aFavorite = _favoriteScriptPaths.contains(a.path);
+      final bFavorite = _favoriteScriptPaths.contains(b.path);
+      if (aFavorite != bFavorite) {
+        return aFavorite ? -1 : 1;
+      }
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+
+    return items;
   }
 
   Future<void> _showRenameDialog(ScriptFile file) async {

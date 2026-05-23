@@ -48,6 +48,7 @@ class EnvVar {
     'value': value,
     'remarks': remarks,
     'group': group,
+    'groups': groups,
   };
 }
 

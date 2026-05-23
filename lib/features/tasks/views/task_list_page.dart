@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/network/dio_client.dart';
+import '../../../core/storage/secure_storage.dart';
 import '../../../core/network/sse_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/task.dart';
@@ -40,15 +41,26 @@ const _taskStatusFilters = [
 ];
 
 class _TaskListPageState extends ConsumerState<TaskListPage> {
+  static const _collapsedGroupsStorageKey = 'tasks.collapsed_groups';
+  static const _scrollOffsetStorageKey = 'tasks.scroll_offset';
+  static const _selectedGroupStorageKey = 'tasks.selected_group';
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
   final Set<String> _collapsedGroups = <String>{};
+  final List<String> _knownGroups = <String>[];
   Timer? _debounce;
+  bool _restoredScrollOffset = false;
 
   @override
   void initState() {
     super.initState();
-    Future.microtask(() => ref.read(taskProvider.notifier).load(refresh: true));
+    Future.microtask(() async {
+      await _restoreTaskUiState();
+      if (!mounted) {
+        return;
+      }
+      await ref.read(taskProvider.notifier).load(refresh: true);
+    });
     _scrollController.addListener(_onScroll);
   }
 
@@ -56,6 +68,13 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 200) {
       ref.read(taskProvider.notifier).loadMore();
+    }
+
+    if (_scrollController.hasClients) {
+      SecureStorage.saveUiState(
+        _scrollOffsetStorageKey,
+        _scrollController.offset.toStringAsFixed(2),
+      );
     }
   }
 
@@ -183,12 +202,132 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
     super.dispose();
   }
 
+  Future<void> _restoreTaskUiState() async {
+    final collapsedRaw = await SecureStorage.getUiState(
+      _collapsedGroupsStorageKey,
+    );
+    final selectedGroup = await SecureStorage.getUiState(
+      _selectedGroupStorageKey,
+    );
+    final groups = <String>{};
+    if (collapsedRaw != null && collapsedRaw.trim().isNotEmpty) {
+      groups.addAll(
+        collapsedRaw
+            .split('\n')
+            .map((item) => item.trim())
+            .where((item) => item.isNotEmpty),
+      );
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _collapsedGroups
+        ..clear()
+        ..addAll(groups);
+    });
+    if (selectedGroup != null) {
+      ref.read(taskProvider.notifier).setLabelFilter(
+        selectedGroup.trim().isEmpty ? null : selectedGroup,
+      );
+    }
+  }
+
+  Future<void> _persistCollapsedGroups() {
+    return SecureStorage.saveUiState(
+      _collapsedGroupsStorageKey,
+      _collapsedGroups.join('\n'),
+    );
+  }
+
+  Future<void> _restoreScrollOffsetIfNeeded() async {
+    if (_restoredScrollOffset || !_scrollController.hasClients) {
+      return;
+    }
+    final raw = await SecureStorage.getUiState(_scrollOffsetStorageKey);
+    if (raw == null || raw.trim().isEmpty) {
+      _restoredScrollOffset = true;
+      return;
+    }
+    final offset = double.tryParse(raw);
+    if (offset == null) {
+      _restoredScrollOffset = true;
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) {
+        return;
+      }
+      final maxOffset = _scrollController.position.maxScrollExtent;
+      _scrollController.jumpTo(offset.clamp(0, maxOffset));
+      _restoredScrollOffset = true;
+    });
+  }
+
+  void _collectKnownGroups(List<Task> tasks) {
+    final groups = tasks
+        .map((task) => task.groupName?.trim() ?? '')
+        .where((group) => group.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    _knownGroups
+      ..clear()
+      ..addAll(groups);
+  }
+
+  Future<void> _showGroupPicker() async {
+    final options = [..._knownGroups];
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text('选择任务分组'),
+              subtitle: Text('可筛选已有分组任务'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.layers_clear_outlined),
+              title: const Text('全部分组'),
+              onTap: () => Navigator.pop(sheetContext, ''),
+            ),
+            ...options.map(
+              (group) => ListTile(
+                leading: const Icon(Icons.label_outline),
+                title: Text(group),
+                trailing: ref.watch(taskProvider).labelFilter == group
+                    ? const Icon(Icons.check, color: AppColors.primary)
+                    : null,
+                onTap: () => Navigator.pop(sheetContext, group),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted || selected == null) {
+      return;
+    }
+
+    if (_scrollController.hasClients && _scrollController.offset > 0) {
+      _scrollController.jumpTo(0);
+    }
+    ref.read(taskProvider.notifier).setLabelFilter(selected.isEmpty ? null : selected);
+    await SecureStorage.saveUiState(_selectedGroupStorageKey, selected);
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(taskProvider);
     final theme = Theme.of(context);
     final isLight = theme.brightness == Brightness.light;
+    _collectKnownGroups(state.tasks);
     final groupedTasks = _groupTasks(state.tasks);
+    _restoreScrollOffsetIfNeeded();
 
     return Scaffold(
       body: Padding(
@@ -335,7 +474,12 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                     ),
                   ),
                   const Spacer(),
-                  if (state.statusFilter != null)
+                  TextButton.icon(
+                    onPressed: _showGroupPicker,
+                    icon: const Icon(Icons.label_outline, size: 16),
+                    label: Text(state.labelFilter?.isNotEmpty == true ? state.labelFilter! : '全部分组'),
+                  ),
+                  if (state.statusFilter != null || state.labelFilter != null)
                     TextButton(
                       onPressed: () {
                         if (_scrollController.hasClients &&
@@ -343,6 +487,8 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                           _scrollController.jumpTo(0);
                         }
                         ref.read(taskProvider.notifier).setStatusFilter(null);
+                        ref.read(taskProvider.notifier).setLabelFilter(null);
+                        SecureStorage.saveUiState(_selectedGroupStorageKey, '');
                       },
                       child: const Text('清除筛选'),
                     ),
@@ -453,6 +599,7 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                   _collapsedGroups.add(group.key);
                 }
               });
+              _persistCollapsedGroups();
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -948,6 +1095,12 @@ class _TaskCard extends StatelessWidget {
                   color: task.isDisabled
                       ? AppColors.primary
                       : AppColors.slate400,
+                ),
+                const SizedBox(width: 6),
+                _SmallIconBtn(
+                  icon: task.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
+                  onTap: onTogglePinned,
+                  color: task.isPinned ? AppColors.amber500 : AppColors.slate400,
                 ),
                 const SizedBox(width: 6),
                 _SmallIconBtn(icon: Icons.edit_outlined, onTap: onEdit),

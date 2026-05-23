@@ -76,6 +76,7 @@ class SecureStorage {
   static const _panelsKey = 'panels_config';
   static const _userKey = 'auth_user';
   static const _appLockConfigKey = 'app_lock_config';
+  static const _prefsNamespaceKey = 'ui_state';
 
   // Token
   static Future<void> saveTokens({
@@ -231,4 +232,29 @@ class SecureStorage {
       _storage.write(key: key, value: value);
 
   static Future<String?> readValue(String key) => _storage.read(key: key);
+
+  static Future<void> saveUiState(String key, String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('${_prefsNamespaceKey}_$key', value);
+  }
+
+  static Future<String?> getUiState(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('${_prefsNamespaceKey}_$key');
+  }
+
+  static Future<void> removeUiState(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('${_prefsNamespaceKey}_$key');
+  }
+
+  static Future<void> saveUiStateList(String key, List<String> values) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('${_prefsNamespaceKey}_$key', values);
+  }
+
+  static Future<List<String>> getUiStateList(String key) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList('${_prefsNamespaceKey}_$key') ?? const [];
+  }
 }

@@ -24,7 +24,7 @@ class EnvListState {
   final int total;
   final bool loading;
   final List<String> groups;
-  final String? selectedGroup;
+  final List<String> selectedGroups;
   final String keyword;
 
   const EnvListState({
@@ -32,7 +32,7 @@ class EnvListState {
     this.total = 0,
     this.loading = false,
     this.groups = const [],
-    this.selectedGroup,
+    this.selectedGroups = const [],
     this.keyword = '',
   });
 
@@ -41,7 +41,7 @@ class EnvListState {
     int? total,
     bool? loading,
     List<String>? groups,
-    Object? selectedGroup = _selectedGroupUnset,
+    Object? selectedGroups = _selectedGroupUnset,
     String? keyword,
   }) {
     return EnvListState(
@@ -49,9 +49,9 @@ class EnvListState {
       total: total ?? this.total,
       loading: loading ?? this.loading,
       groups: groups ?? this.groups,
-      selectedGroup: identical(selectedGroup, _selectedGroupUnset)
-          ? this.selectedGroup
-          : selectedGroup as String?,
+      selectedGroups: identical(selectedGroups, _selectedGroupUnset)
+          ? this.selectedGroups
+          : selectedGroups as List<String>,
       keyword: keyword ?? this.keyword,
     );
   }
@@ -68,8 +68,8 @@ class EnvListNotifier extends StateNotifier<EnvListState> {
       // silently falls back to 20, which previously made the app stop after 40 rows.
       const pageSize = 100;
       final params = <String, dynamic>{'page': 1, 'page_size': pageSize};
-      if (state.selectedGroup != null && state.selectedGroup!.isNotEmpty) {
-        params['group'] = state.selectedGroup;
+      if (state.selectedGroups.isNotEmpty) {
+        params['groups'] = state.selectedGroups.join(',');
       }
       if (state.keyword.isNotEmpty) {
         params['keyword'] = state.keyword;
@@ -120,8 +120,8 @@ class EnvListNotifier extends StateNotifier<EnvListState> {
     }
   }
 
-  void setGroup(String? group) {
-    state = state.copyWith(selectedGroup: group);
+  void setGroups(List<String> groups) {
+    state = state.copyWith(selectedGroups: groups);
     load();
   }
 
@@ -169,10 +169,10 @@ class EnvListNotifier extends StateNotifier<EnvListState> {
     await load();
   }
 
-  Future<void> batchSetGroup(List<int> ids, String group) async {
+  Future<void> batchSetGroup(List<int> ids, List<String> groups) async {
     await DioClient.instance.dio.put(
       ApiEndpoints.envsBatchGroup,
-      data: {'ids': ids, 'group': group},
+      data: {'ids': ids, 'groups': groups},
     );
     await load();
   }
@@ -181,11 +181,17 @@ class EnvListNotifier extends StateNotifier<EnvListState> {
     String name,
     String value, {
     String remarks = '',
-    String group = '',
+    List<String> groups = const [],
   }) async {
     await DioClient.instance.dio.post(
       ApiEndpoints.envs,
-      data: {'name': name, 'value': value, 'remarks': remarks, 'group': group},
+      data: {
+        'name': name,
+        'value': value,
+        'remarks': remarks,
+        'group': groups.join(','),
+        'groups': groups,
+      },
     );
     await load();
   }
@@ -195,7 +201,7 @@ class EnvListNotifier extends StateNotifier<EnvListState> {
     String name,
     String value, {
     String remarks = '',
-    String group = '',
+    List<String> groups = const [],
   }) async {
     await DioClient.instance.dio.put(
       ApiEndpoints.envById(id),
@@ -203,7 +209,8 @@ class EnvListNotifier extends StateNotifier<EnvListState> {
         'name': name,
         'value': value,
         'remarks': remarks,
-        'group': group,
+        'group': groups.join(','),
+        'groups': groups,
       },
     );
     await load();
@@ -288,6 +295,22 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
         );
       },
     );
+  }
+
+  List<String> _normalizeGroups(Iterable<String> values) {
+    final seen = <String>{};
+    final result = <String>[];
+    for (final raw in values) {
+      for (final group in raw.split(',')) {
+        final trimmed = group.trim();
+        if (trimmed.isEmpty || seen.contains(trimmed)) {
+          continue;
+        }
+        seen.add(trimmed);
+        result.add(trimmed);
+      }
+    }
+    return result;
   }
 
   @override
@@ -444,22 +467,22 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
     }
   }
 
-  Future<void> _performBatchGroup(String group) async {
+  Future<void> _performBatchGroup(List<String> groups) async {
     final ids = _selectedIds.toList()..sort();
     if (ids.isEmpty) {
       return;
     }
 
     try {
-      await ref.read(envListProvider.notifier).batchSetGroup(ids, group);
+      await ref.read(envListProvider.notifier).batchSetGroup(ids, groups);
       if (!mounted) {
         return;
       }
 
       _setSelectionMode(false);
-      final message = group.trim().isEmpty
+      final message = groups.isEmpty
           ? '已清空 ${ids.length} 个环境变量的分组'
-          : '已将 ${ids.length} 个环境变量分组到“${group.trim()}”';
+          : '已将 ${ids.length} 个环境变量分组到“${groups.join(' / ')}”';
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
@@ -479,7 +502,8 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
     }
 
     final controller = TextEditingController();
-    final result = await showDialog<String>(
+    final selectedGroups = <String>{};
+    final result = await showDialog<List<String>>(
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
@@ -495,8 +519,9 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                   controller: controller,
                   decoration: const InputDecoration(
                     labelText: '分组名称',
-                    hintText: '输入新分组或选择已有分组',
+                    hintText: '输入多个分组，逗号分隔',
                   ),
+                  onChanged: (_) => setDialogState(() {}),
                 ),
                 if (groups.isNotEmpty) ...[
                   const SizedBox(height: 14),
@@ -513,7 +538,16 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                           (group) => ActionChip(
                             label: Text(group),
                             onPressed: () {
-                              controller.text = group;
+                              if (selectedGroups.contains(group)) {
+                                selectedGroups.remove(group);
+                              } else {
+                                selectedGroups.add(group);
+                              }
+                              final merged = _normalizeGroups([
+                                controller.text,
+                                ...selectedGroups,
+                              ]);
+                              controller.text = merged.join(', ');
                               controller.selection = TextSelection.fromPosition(
                                 TextPosition(offset: controller.text.length),
                               );
@@ -544,7 +578,7 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                   child: SizedBox(
                     height: 44,
                     child: OutlinedButton(
-                      onPressed: () => Navigator.of(dialogCtx).pop(''),
+                      onPressed: () => Navigator.of(dialogCtx).pop(const []),
                       child: const Text('清空分组'),
                     ),
                   ),
@@ -554,8 +588,9 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                   child: SizedBox(
                     height: 44,
                     child: FilledButton(
-                      onPressed: () =>
-                          Navigator.of(dialogCtx).pop(controller.text.trim()),
+                      onPressed: () => Navigator.of(
+                        dialogCtx,
+                      ).pop(_normalizeGroups([controller.text, ...selectedGroups])),
                       child: const Text('确认'),
                     ),
                   ),
@@ -725,50 +760,77 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Container(
-                    height: 44,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: isLight ? Colors.white : AppColors.slate900,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isLight
-                            ? AppColors.slate200
-                            : AppColors.slate800,
+                  PopupMenuButton<String>(
+                    tooltip: '筛选分组',
+                    onSelected: (value) {
+                      if (_selectionMode) {
+                        _setSelectionMode(false);
+                      }
+                      if (value == '__all__') {
+                        ref.read(envListProvider.notifier).setGroups(const []);
+                        return;
+                      }
+                      final current = [...state.selectedGroups];
+                      if (current.contains(value)) {
+                        current.remove(value);
+                      } else {
+                        current.add(value);
+                      }
+                      ref
+                          .read(envListProvider.notifier)
+                          .setGroups(_normalizeGroups(current));
+                    },
+                    itemBuilder: (_) => [
+                      CheckedPopupMenuItem<String>(
+                        value: '__all__',
+                        checked: state.selectedGroups.isEmpty,
+                        child: const Text('全部'),
                       ),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String?>(
-                        value: state.selectedGroup,
-                        hint: const Text('全部', style: TextStyle(fontSize: 13)),
-                        isDense: true,
-                        icon: const Icon(
-                          Icons.expand_more,
-                          size: 18,
-                          color: AppColors.slate400,
+                      ...state.groups.map(
+                        (g) => CheckedPopupMenuItem<String>(
+                          value: g,
+                          checked: state.selectedGroups.contains(g),
+                          child: Text(g),
                         ),
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: theme.colorScheme.onSurface,
+                      ),
+                    ],
+                    child: Container(
+                      height: 44,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: isLight ? Colors.white : AppColors.slate900,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isLight
+                              ? AppColors.slate200
+                              : AppColors.slate800,
                         ),
-                        items: [
-                          const DropdownMenuItem<String?>(
-                            value: null,
-                            child: Text('全部'),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.label_outline,
+                            size: 18,
+                            color: AppColors.slate400,
                           ),
-                          ...state.groups.map(
-                            (g) => DropdownMenuItem<String?>(
-                              value: g,
-                              child: Text(g),
+                          const SizedBox(width: 6),
+                          Text(
+                            state.selectedGroups.isEmpty
+                                ? '全部'
+                                : state.selectedGroups.join(' / '),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: theme.colorScheme.onSurface,
                             ),
                           ),
+                          const SizedBox(width: 4),
+                          const Icon(
+                            Icons.expand_more,
+                            size: 18,
+                            color: AppColors.slate400,
+                          ),
                         ],
-                        onChanged: (v) {
-                          if (_selectionMode) {
-                            _setSelectionMode(false);
-                          }
-                          ref.read(envListProvider.notifier).setGroup(v);
-                        },
                       ),
                     ),
                   ),
@@ -953,7 +1015,7 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
     final nameC = TextEditingController(text: env.name);
     final valueC = TextEditingController(text: env.value);
     final remarksC = TextEditingController(text: env.remarks);
-    final groupC = TextEditingController(text: env.group);
+    final groupC = TextEditingController(text: env.groups.join(', '));
     final groups = [...ref.read(envListProvider).groups];
 
     showModalBottomSheet(
@@ -1105,7 +1167,7 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                               nameC.text.trim(),
                               valueC.text,
                               remarks: remarksC.text.trim(),
-                              group: groupC.text.trim(),
+                              groups: _normalizeGroups([groupC.text]),
                             );
                         Navigator.of(ctx).pop();
                         ScaffoldMessenger.of(
@@ -1198,7 +1260,7 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                     nameC.text.trim(),
                     valueC.text,
                     remarks: remarksC.text.trim(),
-                    group: groupC.text.trim(),
+                    groups: _normalizeGroups([groupC.text]),
                   );
                   Navigator.of(ctx).pop();
                 },

@@ -89,7 +89,7 @@ class Task {
       '$groupLabelPrefix${group.trim()}';
 
   String? get groupName {
-    for (final label in labelsForDisplay) {
+    for (final label in labelList) {
       final trimmed = label.trim();
       if (isGroupLabel(trimmed)) {
         final group = trimmed.substring(groupLabelPrefix.length).trim();
@@ -101,8 +101,14 @@ class Task {
     return null;
   }
 
-  List<String> get userLabelsForDisplay =>
-      labelsForDisplay.where((label) => !isGroupLabel(label)).toList();
+  List<String> get userLabelsForDisplay {
+    final visible = labelsForDisplay.where((label) => !isGroupLabel(label)).toList();
+    final group = groupName;
+    if (group != null && group.isNotEmpty) {
+      visible.remove(group);
+    }
+    return visible;
+  }
 
   factory Task.fromJson(Map<String, dynamic> json) {
     return Task(
