@@ -44,10 +44,13 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
   static const _collapsedGroupsStorageKey = 'tasks.collapsed_groups';
   static const _scrollOffsetStorageKey = 'tasks.scroll_offset';
   static const _selectedGroupStorageKey = 'tasks.selected_group';
+  static const _groupOrderStorageKey = 'tasks.group_order';
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
   final Set<String> _collapsedGroups = <String>{};
   final List<String> _knownGroups = <String>[];
+  List<String> _groupOrder = <String>[];
+  bool _groupReorderMode = false;
   Timer? _debounce;
   bool _restoredScrollOffset = false;
 
@@ -217,14 +220,25 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
             .map((item) => item.trim())
             .where((item) => item.isNotEmpty),
       );
+    } else {
+      groups.add('');
     }
     if (!mounted) {
       return;
     }
+    final groupOrderRaw = await SecureStorage.getUiState(_groupOrderStorageKey);
+    final savedGroupOrder = <String>[];
+    if (groupOrderRaw != null && groupOrderRaw.trim().isNotEmpty) {
+      savedGroupOrder.addAll(
+        groupOrderRaw.split('\n').map((s) => s.trim()),
+      );
+    }
+    if (!mounted) return;
     setState(() {
       _collapsedGroups
         ..clear()
         ..addAll(groups);
+      _groupOrder = savedGroupOrder;
     });
     if (selectedGroup != null) {
       ref.read(taskProvider.notifier).setLabelFilter(
@@ -238,6 +252,28 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
       _collapsedGroupsStorageKey,
       _collapsedGroups.join('\n'),
     );
+  }
+
+  Future<void> _persistGroupOrder() {
+    return SecureStorage.saveUiState(
+      _groupOrderStorageKey,
+      _groupOrder.join('\n'),
+    );
+  }
+
+  List<_TaskGroup> _sortGroupsByOrder(List<_TaskGroup> groups) {
+    if (_groupOrder.isEmpty) return groups;
+    final orderMap = <String, int>{};
+    for (var i = 0; i < _groupOrder.length; i++) {
+      orderMap[_groupOrder[i]] = i;
+    }
+    groups.sort((a, b) {
+      final ai = orderMap[a.key] ?? 9999;
+      final bi = orderMap[b.key] ?? 9999;
+      if (ai != bi) return ai.compareTo(bi);
+      return 0;
+    });
+    return groups;
   }
 
   Future<void> _restoreScrollOffsetIfNeeded() async {
@@ -326,7 +362,7 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
     final theme = Theme.of(context);
     final isLight = theme.brightness == Brightness.light;
     _collectKnownGroups(state.tasks);
-    final groupedTasks = _groupTasks(state.tasks);
+    final groupedTasks = _sortGroupsByOrder(_groupTasks(state.tasks));
     _restoreScrollOffsetIfNeeded();
 
     return Scaffold(
@@ -517,6 +553,8 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                         physics: const AlwaysScrollableScrollPhysics(),
                         children: [_buildEmpty()],
                       )
+                    : _groupReorderMode
+                    ? _buildGroupReorderView(groupedTasks, isLight)
                     : ListView(
                         controller: _scrollController,
                         physics: const AlwaysScrollableScrollPhysics(),
@@ -572,10 +610,318 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
     return groups;
   }
 
+  Future<void> _renameGroup(String oldName, List<Task> tasks) async {
+    final controller = TextEditingController(text: oldName);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('重命名分组'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: '分组名称',
+            hintText: '输入新的分组名称',
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (newName == null || newName.isEmpty || newName == oldName) return;
+    try {
+      await ref.read(taskProvider.notifier).batchUpdateGroupLabel(
+        tasks: tasks,
+        oldGroupName: oldName,
+        newGroupName: newName,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('已将分组 "$oldName" 重命名为 "$newName"')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('重命名分组失败')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteGroup(String groupName, List<Task> tasks) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除分组'),
+        content: Text('确定将 "${groupName}" 分组中的 ${tasks.length} 个任务移回未分组？'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('确定', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ref.read(taskProvider.notifier).batchUpdateGroupLabel(
+        tasks: tasks,
+        oldGroupName: groupName,
+        newGroupName: null,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('已删除分组 "$groupName"')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('删除分组失败')),
+        );
+      }
+    }
+  }
+
+  Future<void> _addTasksToGroup(String targetGroup, List<Task> ungroupedTasks) async {
+    if (ungroupedTasks.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('没有未分组的任务可添加')),
+      );
+      return;
+    }
+    final selected = <int>{};
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: Text('添加任务到 "$targetGroup"'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 400,
+            child: ListView.builder(
+              itemCount: ungroupedTasks.length,
+              itemBuilder: (ctx, i) {
+                final task = ungroupedTasks[i];
+                return CheckboxListTile(
+                  value: selected.contains(task.id),
+                  title: Text(task.name, style: const TextStyle(fontSize: 14)),
+                  dense: true,
+                  onChanged: (v) {
+                    setDialogState(() {
+                      if (v == true) {
+                        selected.add(task.id);
+                      } else {
+                        selected.remove(task.id);
+                      }
+                    });
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                if (selected.isEmpty) return;
+                final tasksToMove = ungroupedTasks.where((t) => selected.contains(t.id)).toList();
+                try {
+                  await ref.read(taskProvider.notifier).batchUpdateGroupLabel(
+                    tasks: tasksToMove,
+                    oldGroupName: null,
+                    newGroupName: targetGroup,
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('已将 ${tasksToMove.length} 个任务添加到 "$targetGroup"')),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('添加任务到分组失败')),
+                    );
+                  }
+                }
+              },
+              child: Text('添加 (${selected.length})'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showCreateGroupFromUngrouped(List<Task> ungroupedTasks) async {
+    final nameController = TextEditingController();
+    final selected = <int>{};
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('新建分组'),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 450,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: nameController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: '分组名称',
+                    hintText: '输入新分组的名称',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('选择要加入的任务:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: ungroupedTasks.length,
+                    itemBuilder: (ctx, i) {
+                      final task = ungroupedTasks[i];
+                      return CheckboxListTile(
+                        value: selected.contains(task.id),
+                        title: Text(task.name, style: const TextStyle(fontSize: 14)),
+                        dense: true,
+                        onChanged: (v) {
+                          setDialogState(() {
+                            if (v == true) {
+                              selected.add(task.id);
+                            } else {
+                              selected.remove(task.id);
+                            }
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+            TextButton(
+              onPressed: () async {
+                final groupName = nameController.text.trim();
+                Navigator.pop(ctx);
+                if (groupName.isEmpty || selected.isEmpty) return;
+                final tasksToMove = ungroupedTasks.where((t) => selected.contains(t.id)).toList();
+                try {
+                  await ref.read(taskProvider.notifier).batchUpdateGroupLabel(
+                    tasks: tasksToMove,
+                    oldGroupName: null,
+                    newGroupName: groupName,
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('已创建分组 "$groupName" 并添加 ${tasksToMove.length} 个任务')),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('创建分组失败')),
+                    );
+                  }
+                }
+              },
+              child: const Text('创建'),
+            ),
+          ],
+        ),
+      ),
+    );
+    nameController.dispose();
+  }
+
+  Widget _buildGroupReorderView(List<_TaskGroup> groups, bool isLight) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: Row(
+            children: [
+              const Icon(Icons.swap_vert, size: 18),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text('长按拖拽调整分组顺序', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
+              TextButton(
+                onPressed: () => setState(() => _groupReorderMode = false),
+                child: const Text('完成'),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ReorderableListView.builder(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+            itemCount: groups.length,
+            onReorder: (oldIndex, newIndex) {
+              setState(() {
+                if (newIndex > oldIndex) newIndex--;
+                final item = groups.removeAt(oldIndex);
+                groups.insert(newIndex, item);
+                _groupOrder = groups.map((g) => g.key).toList();
+              });
+              _persistGroupOrder();
+            },
+            itemBuilder: (ctx, i) {
+              final group = groups[i];
+              return Container(
+                key: ValueKey(group.key),
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                decoration: BoxDecoration(
+                  color: isLight ? Colors.white : AppColors.slate900,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: isLight ? AppColors.slate200 : AppColors.slate800,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.drag_handle, size: 20, color: AppColors.slate400),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        group.title,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    Text(
+                      '${group.tasks.length} 条',
+                      style: const TextStyle(fontSize: 12, color: AppColors.slate400),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildTaskGroup(_TaskGroup group, bool isLight) {
     final collapsed = _collapsedGroups.contains(group.key);
     final enabledCount = group.tasks.where((task) => task.isEnabled).length;
     final runningCount = group.tasks.where((task) => task.isRunning).length;
+    final isUngrouped = group.key.isEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -600,6 +946,10 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                 }
               });
               _persistCollapsedGroups();
+            },
+            onLongPress: () {
+              HapticFeedback.mediumImpact();
+              setState(() => _groupReorderMode = true);
             },
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -635,6 +985,22 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                       label: '$enabledCount 已启用',
                       active: enabledCount > 0,
                     ),
+                  const SizedBox(width: 4),
+                  _GroupPopupMenu(
+                    isUngrouped: isUngrouped,
+                    onRename: isUngrouped ? null : () => _renameGroup(group.key, group.tasks),
+                    onDelete: isUngrouped ? null : () => _deleteGroup(group.key, group.tasks),
+                    onAddTasks: () {
+                      final allTasks = ref.read(taskProvider).tasks;
+                      final ungrouped = allTasks.where((t) => (t.groupName ?? '').isEmpty).toList();
+                      final targetGroup = isUngrouped ? null : group.key;
+                      if (targetGroup == null) {
+                        _showCreateGroupFromUngrouped(ungrouped);
+                      } else {
+                        _addTasksToGroup(targetGroup, ungrouped);
+                      }
+                    },
+                  ),
                 ],
               ),
             ),
@@ -1880,3 +2246,46 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
 
 String _extractTaskError(dynamic error, String fallback) =>
     extractErrorMessage(error, fallback);
+
+class _GroupPopupMenu extends StatelessWidget {
+  final bool isUngrouped;
+  final VoidCallback? onRename;
+  final VoidCallback? onDelete;
+  final VoidCallback onAddTasks;
+
+  const _GroupPopupMenu({
+    required this.isUngrouped,
+    this.onRename,
+    this.onDelete,
+    required this.onAddTasks,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.more_vert, size: 18, color: AppColors.slate400),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(),
+      itemBuilder: (ctx) => [
+        if (!isUngrouped && onRename != null)
+          const PopupMenuItem(value: 'rename', child: Text('重命名分组')),
+        if (!isUngrouped && onDelete != null)
+          const PopupMenuItem(value: 'delete', child: Text('删除分组')),
+        PopupMenuItem(
+          value: 'add',
+          child: Text(isUngrouped ? '新建分组' : '添加任务'),
+        ),
+      ],
+      onSelected: (value) {
+        switch (value) {
+          case 'rename':
+            onRename?.call();
+          case 'delete':
+            onDelete?.call();
+          case 'add':
+            onAddTasks();
+        }
+      },
+    );
+  }
+}

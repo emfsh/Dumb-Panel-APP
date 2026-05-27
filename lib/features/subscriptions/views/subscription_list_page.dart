@@ -445,7 +445,10 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
     final aliasC = TextEditingController();
     final whitelistC = TextEditingController();
     final blacklistC = TextEditingController();
+    final dependOnC = TextEditingController();
+    final hookScriptC = TextEditingController();
     String selectedType = 'git-repo';
+    bool forceOverwrite = true;
 
     showModalBottomSheet(
       context: context,
@@ -536,6 +539,14 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                                 ),
                               ),
                               const SizedBox(height: 12),
+                              TextField(
+                                controller: subPathC,
+                                decoration: const InputDecoration(
+                                  labelText: '指定子目录',
+                                  hintText: '逗号分隔多个，留空拉取全部',
+                                ),
+                              ),
+                              const SizedBox(height: 12),
                             ],
                             TextField(
                               controller: scheduleC,
@@ -565,7 +576,7 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                               controller: whitelistC,
                               decoration: const InputDecoration(
                                 labelText: '白名单',
-                                hintText: '文件名关键字，多个用 | 分隔',
+                                hintText: '文件名/路径白名单 (逗号分隔)',
                               ),
                             ),
                             const SizedBox(height: 12),
@@ -573,9 +584,51 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                               controller: blacklistC,
                               decoration: const InputDecoration(
                                 labelText: '黑名单',
-                                hintText: '排除关键字，多个用 | 分隔',
+                                hintText: '文件名/路径黑名单 (逗号分隔)',
                               ),
                             ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: dependOnC,
+                              decoration: const InputDecoration(
+                                labelText: '依赖说明',
+                                hintText: '订阅依赖、过滤说明或迁移信息',
+                              ),
+                            ),
+                            if (selectedType != 'single-file') ...[
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('覆盖本地修改', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          forceOverwrite ? '拉取时覆盖本地修改' : '拉取时保留本地修改的文件',
+                                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Switch(
+                                    value: forceOverwrite,
+                                    onChanged: (v) => setSheetState(() => forceOverwrite = v),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: hookScriptC,
+                                maxLines: 3,
+                                decoration: const InputDecoration(
+                                  labelText: '拉取后钩子',
+                                  hintText: '拉取成功后执行的 Shell 命令',
+                                  alignLabelWithHint: true,
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 16),
                           ],
                         ),
@@ -605,6 +658,9 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                                       'alias': aliasC.text.trim(),
                                       'whitelist': whitelistC.text.trim(),
                                       'blacklist': blacklistC.text.trim(),
+                                      'depend_on': dependOnC.text.trim(),
+                                      'hook_script': hookScriptC.text.trim(),
+                                      'force_overwrite': forceOverwrite,
                                     });
                                 Navigator.of(ctx).pop();
                               },
@@ -643,7 +699,10 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
     final aliasC = TextEditingController(text: sub.alias);
     final whitelistC = TextEditingController(text: sub.whitelist);
     final blacklistC = TextEditingController(text: sub.blacklist);
+    final dependOnC = TextEditingController(text: sub.dependOn);
+    final hookScriptC = TextEditingController(text: sub.hookScript);
     String selectedType = sub.normalizedType;
+    bool forceOverwrite = sub.forceOverwrite ?? true;
 
     showModalBottomSheet(
       context: context,
@@ -737,8 +796,8 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                               TextField(
                                 controller: subPathC,
                                 decoration: const InputDecoration(
-                                  labelText: '子目录 (可选)',
-                                  hintText: '仅拉取仓库内指定子目录',
+                                  labelText: '指定子目录',
+                                  hintText: '逗号分隔多个，留空拉取全部',
                                 ),
                               ),
                               const SizedBox(height: 12),
@@ -771,7 +830,7 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                               controller: whitelistC,
                               decoration: const InputDecoration(
                                 labelText: '白名单',
-                                hintText: '文件名关键字，多个用 | 分隔',
+                                hintText: '文件名/路径白名单 (逗号分隔)',
                               ),
                             ),
                             const SizedBox(height: 12),
@@ -779,9 +838,51 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                               controller: blacklistC,
                               decoration: const InputDecoration(
                                 labelText: '黑名单',
-                                hintText: '排除关键字，多个用 | 分隔',
+                                hintText: '文件名/路径黑名单 (逗号分隔)',
                               ),
                             ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: dependOnC,
+                              decoration: const InputDecoration(
+                                labelText: '依赖说明',
+                                hintText: '订阅依赖、过滤说明或迁移信息',
+                              ),
+                            ),
+                            if (selectedType != 'single-file') ...[
+                              const SizedBox(height: 16),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('覆盖本地修改', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          forceOverwrite ? '拉取时覆盖本地修改' : '拉取时保留本地修改的文件',
+                                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Switch(
+                                    value: forceOverwrite,
+                                    onChanged: (v) => setSheetState(() => forceOverwrite = v),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                controller: hookScriptC,
+                                maxLines: 3,
+                                decoration: const InputDecoration(
+                                  labelText: '拉取后钩子',
+                                  hintText: '拉取成功后执行的 Shell 命令',
+                                  alignLabelWithHint: true,
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 16),
                           ],
                         ),
@@ -818,6 +919,9 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                                       'alias': aliasC.text.trim(),
                                       'whitelist': whitelistC.text.trim(),
                                       'blacklist': blacklistC.text.trim(),
+                                      'depend_on': dependOnC.text.trim(),
+                                      'hook_script': hookScriptC.text.trim(),
+                                      'force_overwrite': forceOverwrite,
                                     });
                                 Navigator.of(ctx).pop();
                               },

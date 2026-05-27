@@ -18,6 +18,7 @@ class Subscription {
   final String alias;
   final String dependOn;
   final String hookScript;
+  final bool? forceOverwrite;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -41,6 +42,7 @@ class Subscription {
     this.alias = '',
     this.dependOn = '',
     this.hookScript = '',
+    this.forceOverwrite,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -96,6 +98,7 @@ class Subscription {
       alias: json['alias']?.toString() ?? '',
       dependOn: json['depend_on']?.toString() ?? '',
       hookScript: json['hook_script']?.toString() ?? '',
+      forceOverwrite: json['force_overwrite'] as bool?,
       createdAt: _date(json['created_at']) ?? DateTime.now(),
       updatedAt: _date(json['updated_at']) ?? DateTime.now(),
     );
@@ -117,6 +120,7 @@ class Subscription {
     'alias': alias,
     'depend_on': dependOn,
     'hook_script': hookScript,
+    'force_overwrite': forceOverwrite ?? true,
   };
 }
 

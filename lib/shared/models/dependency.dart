@@ -21,15 +21,18 @@ class Dependency {
     required this.updatedAt,
   });
 
+  bool get isQueued => status == 'queued';
   bool get isInstalling => status == 'installing';
   bool get isRemoving => status == 'removing';
   bool get isInstalled => status == 'installed';
   bool get isFailed => status == 'failed';
   bool get isCancelled => status == 'cancelled';
-  bool get isBusy => isInstalling || isRemoving;
+  bool get isBusy => isInstalling || isRemoving || isQueued;
 
   String get statusText {
     switch (status) {
+      case 'queued':
+        return '排队中';
       case 'installing':
         return '安装中';
       case 'removing':

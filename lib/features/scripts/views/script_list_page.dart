@@ -1827,13 +1827,12 @@ class _ScriptViewPageState extends ConsumerState<ScriptViewPage> {
     if (!_editing && !state.isBinary) {
       _contentController.text = state.content;
     }
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final editorBackground =
         _editorBackgroundColor ??
-        (Theme.of(context).brightness == Brightness.light
-            ? Colors.white
-            : AppColors.slate900);
+        (isDark ? const Color(0xFF1E1E1E) : Colors.white);
     final editorForeground = _useLightForeground(editorBackground)
-        ? AppColors.termText
+        ? const Color(0xFFD4D4D4)
         : AppColors.slate900;
 
     return Scaffold(

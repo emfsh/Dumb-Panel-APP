@@ -225,6 +225,7 @@ class _DepListPageState extends ConsumerState<DepListPage> {
   bool _countLoading = true;
   bool _mirrorLoading = false;
   bool _mirrorSaving = false;
+  String? _statusFilter;
 
   @override
   void initState() {
@@ -900,6 +901,39 @@ class _DepListPageState extends ConsumerState<DepListPage> {
                 ],
               ),
             ),
+            const SizedBox(height: 10),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                children: [
+                  _StatusFilterChip(
+                    label: '全部',
+                    count: state.items.length,
+                    selected: _statusFilter == null,
+                    isLight: isLight,
+                    onTap: () => setState(() => _statusFilter = null),
+                  ),
+                  const SizedBox(width: 8),
+                  _StatusFilterChip(
+                    label: '已安装',
+                    count: state.items.where((d) => d.isInstalled).length,
+                    selected: _statusFilter == 'installed',
+                    isLight: isLight,
+                    color: AppColors.primary,
+                    onTap: () => setState(() => _statusFilter = _statusFilter == 'installed' ? null : 'installed'),
+                  ),
+                  const SizedBox(width: 8),
+                  _StatusFilterChip(
+                    label: '失败',
+                    count: state.items.where((d) => d.isFailed).length,
+                    selected: _statusFilter == 'failed',
+                    isLight: isLight,
+                    color: AppColors.red500,
+                    onTap: () => setState(() => _statusFilter = _statusFilter == 'failed' ? null : 'failed'),
+                  ),
+                ],
+              ),
+            ),
             if (_selectedIds.isNotEmpty) ...[
               const SizedBox(height: 8),
               Padding(
@@ -932,30 +966,37 @@ class _DepListPageState extends ConsumerState<DepListPage> {
                           ),
                         ],
                       )
-                    : state.items.isEmpty
-                    ? ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        children: [
-                          const SizedBox(height: 100),
-                          Icon(
-                            Icons.inventory_2_outlined,
-                            size: 56,
-                            color: AppColors.slate400.withAlpha(120),
-                          ),
-                          const SizedBox(height: 12),
-                          Center(
-                            child: Text(
-                              '暂无${_typeLabel(state.selectedType)}依赖',
-                              style: const TextStyle(color: AppColors.slate400),
-                            ),
-                          ),
-                        ],
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                        itemCount: state.items.length,
-                        itemBuilder: (_, i) {
-                          final dep = state.items[i];
+                    : () {
+                        final filtered = _statusFilter == null
+                            ? state.items
+                            : state.items.where((d) => d.status == _statusFilter).toList();
+                        if (filtered.isEmpty) {
+                          return ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: [
+                              const SizedBox(height: 100),
+                              Icon(
+                                Icons.inventory_2_outlined,
+                                size: 56,
+                                color: AppColors.slate400.withAlpha(120),
+                              ),
+                              const SizedBox(height: 12),
+                              Center(
+                                child: Text(
+                                  _statusFilter != null
+                                      ? '没有${_statusFilter == 'installed' ? '已安装' : '失败'}的依赖'
+                                      : '暂无${_typeLabel(state.selectedType)}依赖',
+                                  style: const TextStyle(color: AppColors.slate400),
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+                        return ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                          itemCount: filtered.length,
+                          itemBuilder: (_, i) {
+                            final dep = filtered[i];
                           return _DepCard(
                             dep: dep,
                             isLight: isLight,
@@ -987,7 +1028,8 @@ class _DepListPageState extends ConsumerState<DepListPage> {
                                 : () => _confirmDelete(dep, force: true),
                           );
                         },
-                      ),
+                      );
+                    }(),
               ),
             ),
           ],
@@ -1306,6 +1348,78 @@ class _DepLogStreamPageState extends ConsumerState<DepLogStreamPage> {
                   ),
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusFilterChip extends StatelessWidget {
+  final String label;
+  final int count;
+  final bool selected;
+  final bool isLight;
+  final Color? color;
+  final VoidCallback onTap;
+
+  const _StatusFilterChip({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.isLight,
+    this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final activeColor = color ?? AppColors.primary;
+    final bg = selected
+        ? activeColor.withAlpha(20)
+        : (isLight ? AppColors.slate50 : AppColors.slate900);
+    final fg = selected
+        ? activeColor
+        : (isLight ? AppColors.slate600 : AppColors.slate400);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? activeColor.withAlpha(60) : (isLight ? AppColors.slate200 : AppColors.slate800),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                color: fg,
+              ),
+            ),
+            const SizedBox(width: 5),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: selected ? activeColor : (isLight ? AppColors.slate200 : AppColors.slate800),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? Colors.white : fg,
+                ),
+              ),
+            ),
           ],
         ),
       ),

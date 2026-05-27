@@ -463,12 +463,32 @@ class _ServerInfoCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                '已运行：${data.uptime}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isLight ? AppColors.slate500 : AppColors.slate400,
-                ),
+              Row(
+                children: [
+                  Text(
+                    '已运行：${data.uptime}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isLight ? AppColors.slate500 : AppColors.slate400,
+                    ),
+                  ),
+                  if (data.panelVersion.isNotEmpty) ...[
+                    Container(
+                      width: 1,
+                      height: 10,
+                      margin: const EdgeInsets.symmetric(horizontal: 10),
+                      color: isLight ? AppColors.slate300 : AppColors.slate700,
+                    ),
+                    Text(
+                      'v${data.panelVersion}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),

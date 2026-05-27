@@ -13,6 +13,8 @@ const _kGitHubRepo = 'linzixuanzz/Dumb-Panel-APP';
 const _kGitHubDownloadHost = 'github.com';
 const _kGitHubReleaseHost = 'objects.githubusercontent.com';
 const _kGitHubAssetHost = 'githubusercontent.com';
+const _kGitHubMirrorHost = 'gh.301.ee';
+const _kGitHubMirrorPrefix = 'https://$_kGitHubMirrorHost/';
 
 bool _isTrustedDownloadUrl(String rawUrl) {
   final uri = Uri.tryParse(rawUrl);
@@ -22,7 +24,18 @@ bool _isTrustedDownloadUrl(String rawUrl) {
   final host = uri.host.toLowerCase();
   return host == _kGitHubDownloadHost ||
       host == _kGitHubReleaseHost ||
+      host == _kGitHubMirrorHost ||
       host.endsWith('.$_kGitHubAssetHost');
+}
+
+String _applyGitHubMirror(String url) {
+  final uri = Uri.tryParse(url);
+  if (uri == null) return url;
+  final host = uri.host.toLowerCase();
+  if (host == _kGitHubDownloadHost || host.endsWith('.$_kGitHubAssetHost')) {
+    return '$_kGitHubMirrorPrefix$url';
+  }
+  return url;
 }
 
 class AppUpdateInfo {
@@ -118,6 +131,7 @@ class AppUpdateService {
   }
 
   /// Download APK and install it.
+  /// Uses GitHub mirror for acceleration and reuses existing downloads.
   static Future<void> downloadAndInstall(
     String url,
     String assetName,
@@ -137,34 +151,47 @@ class AppUpdateService {
       final filePath = '${dir.path}/$safeName';
 
       final existingFile = File(filePath);
+      bool needsDownload = true;
+
       if (await existingFile.exists()) {
-        await existingFile.delete();
+        final existingSize = await existingFile.length();
+        if (existingSize > 1024 * 1024) {
+          needsDownload = false;
+          onProgress(1.0);
+        } else {
+          await existingFile.delete();
+        }
       }
 
-      final response = await _dio.download(
-        url,
-        filePath,
-        onReceiveProgress: (received, total) {
-          if (total > 0) {
-            onProgress(received / total);
-          }
-        },
-        options: Options(receiveTimeout: const Duration(minutes: 10)),
-      );
-      final finalHost = response.realUri.host.toLowerCase();
-      if (!(_isTrustedDownloadUrl(response.realUri.toString()) ||
-          finalHost == _kGitHubReleaseHost ||
-          finalHost.endsWith('.$_kGitHubAssetHost'))) {
-        throw const FormatException('更新资源跳转到了不受信任的来源');
+      if (needsDownload) {
+        final downloadUrl = _applyGitHubMirror(url);
+
+        final response = await _dio.download(
+          downloadUrl,
+          filePath,
+          onReceiveProgress: (received, total) {
+            if (total > 0) {
+              onProgress(received / total);
+            }
+          },
+          options: Options(receiveTimeout: const Duration(minutes: 10)),
+        );
+        final finalHost = response.realUri.host.toLowerCase();
+        if (!(_isTrustedDownloadUrl(response.realUri.toString()) ||
+            finalHost == _kGitHubReleaseHost ||
+            finalHost == _kGitHubMirrorHost ||
+            finalHost.endsWith('.$_kGitHubAssetHost'))) {
+          throw const FormatException('更新资源跳转到了不受信任的来源');
+        }
       }
 
       onDone();
 
-      // Trigger Android system install
       if (Platform.isAndroid) {
+        final originalHost = Uri.parse(url).host.toLowerCase();
         await _platform.invokeMethod('installApk', {
           'path': filePath,
-          'sourceHost': Uri.parse(url).host.toLowerCase(),
+          'sourceHost': originalHost,
         });
       }
     } catch (e) {
@@ -320,7 +347,7 @@ class _UpdateDialogState extends State<_UpdateDialog> {
           ] else ...[
             const SizedBox(height: 12),
             Text(
-              '更新包将直接从 GitHub Release 官方地址下载，并校验为当前应用包名后再触发安装。',
+              '更新包通过 GitHub 加速镜像下载，校验包名与签名后再安装。已下载的安装包会自动复用，无需重复下载。',
               style: TextStyle(
                 fontSize: 12,
                 color: widget.isLight

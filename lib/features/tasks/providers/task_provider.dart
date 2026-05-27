@@ -166,6 +166,29 @@ class TaskNotifier extends StateNotifier<TaskListState> {
     await DioClient.instance.dio.post(ApiEndpoints.taskCopy(id));
     await load(refresh: true);
   }
+
+  Future<void> updateTaskLabels(int id, List<String> labels) async {
+    await DioClient.instance.dio.put(
+      ApiEndpoints.taskById(id),
+      data: {'labels': labels},
+    );
+  }
+
+  Future<void> batchUpdateGroupLabel({
+    required List<Task> tasks,
+    required String? oldGroupName,
+    required String? newGroupName,
+  }) async {
+    for (final task in tasks) {
+      final currentLabels = task.labelList.toList();
+      currentLabels.removeWhere((l) => Task.isGroupLabel(l));
+      if (newGroupName != null && newGroupName.trim().isNotEmpty) {
+        currentLabels.add(Task.toGroupLabel(newGroupName));
+      }
+      await updateTaskLabels(task.id, currentLabels);
+    }
+    await load(refresh: true);
+  }
 }
 
 final taskProvider = StateNotifierProvider<TaskNotifier, TaskListState>((ref) {

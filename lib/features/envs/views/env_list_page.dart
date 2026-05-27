@@ -215,6 +215,22 @@ class EnvListNotifier extends StateNotifier<EnvListState> {
     );
     await load();
   }
+
+  Future<void> sortEnvs(List<int> ids) async {
+    await DioClient.instance.dio.put(
+      ApiEndpoints.envsSort,
+      data: {'ids': ids},
+    );
+    await load();
+  }
+
+  void reorderLocal(int oldIndex, int newIndex) {
+    final items = List<EnvVar>.from(state.envs);
+    if (newIndex > oldIndex) newIndex--;
+    final item = items.removeAt(oldIndex);
+    items.insert(newIndex, item);
+    state = state.copyWith(envs: items);
+  }
 }
 
 class EnvListPage extends ConsumerStatefulWidget {
@@ -230,6 +246,7 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
   Timer? _debounce;
 
   bool _selectionMode = false;
+  bool _sortMode = false;
 
   Widget _buildGroupAutocomplete({
     required TextEditingController controller,
@@ -641,13 +658,42 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                   ),
                   Row(
                     children: [
-                      _HeaderChipButton(
-                        label: _selectionMode ? '取消' : '批量',
-                        icon: _selectionMode ? Icons.close : Icons.done_all,
-                        isLight: isLight,
-                        onTap: () => _setSelectionMode(!_selectionMode),
-                      ),
+                      if (!_sortMode)
+                        _HeaderChipButton(
+                          label: _selectionMode ? '取消' : '批量',
+                          icon: _selectionMode ? Icons.close : Icons.done_all,
+                          isLight: isLight,
+                          onTap: () => _setSelectionMode(!_selectionMode),
+                        ),
                       if (!_selectionMode) ...[
+                        const SizedBox(width: 8),
+                        _HeaderChipButton(
+                          label: _sortMode ? '完成' : '排序',
+                          icon: _sortMode ? Icons.check : Icons.swap_vert,
+                          isLight: isLight,
+                          onTap: () async {
+                            if (_sortMode) {
+                              final ids = ref.read(envListProvider).envs.map((e) => e.id).toList();
+                              try {
+                                await ref.read(envListProvider.notifier).sortEnvs(ids);
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('排序已保存')),
+                                  );
+                                }
+                              } catch (_) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('保存排序失败')),
+                                  );
+                                }
+                              }
+                            }
+                            setState(() => _sortMode = !_sortMode);
+                          },
+                        ),
+                      ],
+                      if (!_selectionMode && !_sortMode) ...[
                         const SizedBox(width: 8),
                         GestureDetector(
                           onTap: () => _showCreateDialog(),
@@ -916,6 +962,29 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                 ),
               ),
             ],
+            if (_sortMode) ...[
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isLight ? AppColors.primary.withAlpha(12) : AppColors.primary.withAlpha(20),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.primary.withAlpha(40)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.swap_vert, size: 16, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text('长按拖拽调整顺序，点击「完成」保存', style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w500)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             Expanded(
               child: RefreshIndicator(
@@ -952,6 +1021,53 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                           ),
                         ],
                       )
+                    : _sortMode
+                    ? ReorderableListView.builder(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                        itemCount: state.envs.length,
+                        onReorder: (oldIndex, newIndex) {
+                          ref.read(envListProvider.notifier).reorderLocal(oldIndex, newIndex);
+                        },
+                        itemBuilder: (_, i) {
+                          final env = state.envs[i];
+                          return Container(
+                            key: ValueKey(env.id),
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: isLight ? Colors.white : AppColors.slate900,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isLight ? AppColors.slate200 : AppColors.slate800,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.drag_handle, size: 20, color: AppColors.slate400),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(env.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                                      if (env.remarks.isNotEmpty)
+                                        Text(env.remarks, style: TextStyle(fontSize: 12, color: AppColors.slate400), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                    ],
+                                  ),
+                                ),
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: env.enabled ? AppColors.primary : AppColors.slate300,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      )
                     : ListView.builder(
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
                         itemCount: state.envs.length,
@@ -971,7 +1087,8 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                             },
                             onLongPress: () {
                               if (!_selectionMode) {
-                                _enterSelectionModeWith(env.id);
+                                HapticFeedback.mediumImpact();
+                                setState(() => _sortMode = true);
                               }
                             },
                             onSelectedChanged: () => _toggleSelection(env.id),

@@ -38,6 +38,7 @@ class DashboardData {
   String get hostname => system['hostname']?.toString() ?? '-';
   String get os => system['os']?.toString() ?? '-';
   String get panelTitle => system['panel_title']?.toString() ?? '';
+  String get panelVersion => system['panel_version']?.toString() ?? '';
 
   // 仪表盘数据 — 字段名匹配后端实际返回
   int get totalTasks => (dashboard['task_count'] as num?)?.toInt() ?? 0;
@@ -75,10 +76,12 @@ class DashboardNotifier extends StateNotifier<DashboardData> {
         dio.get(ApiEndpoints.systemInfo),
         dio.get(ApiEndpoints.dashboard),
         dio.get(ApiEndpoints.panelSettings),
+        dio.get(ApiEndpoints.systemVersion),
       ]);
       final sysData = extractData(results[0].data);
       final dashData = extractData(results[1].data);
       final panelData = extractData(results[2].data);
+      final versionData = extractData(results[3].data);
       final sysMap = sysData is Map<String, dynamic>
           ? Map<String, dynamic>.from(sysData)
           : <String, dynamic>{};
@@ -86,6 +89,12 @@ class DashboardNotifier extends StateNotifier<DashboardData> {
         final title = panelData['panel_title']?.toString() ?? '';
         if (title.isNotEmpty) {
           sysMap['panel_title'] = title;
+        }
+      }
+      if (versionData is Map) {
+        final version = versionData['version']?.toString() ?? '';
+        if (version.isNotEmpty) {
+          sysMap['panel_version'] = version;
         }
       }
       state = state.copyWith(
