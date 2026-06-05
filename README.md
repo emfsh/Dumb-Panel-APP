@@ -1,17 +1,23 @@
-# daidai_app
+# 呆呆面板 APP
 
-A new Flutter project.
+呆呆面板 Flutter 客户端，用于在移动端管理面板、任务、脚本、环境变量、订阅、依赖、通知、安全设置与备份恢复。
 
-## Getting Started
+## 当前版本
 
-This project is a starting point for a Flutter application.
+- APP：`v1.2.1`
+- 适配面板：`v2.2.17`
 
-A few resources to get you started if this is your first Flutter project:
+## 本次适配重点
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+- 支持极验 V4 滑块验证码登录。
+- 支持 Python 3.10 / 3.11 / 3.12 多版本依赖环境查看、切换和默认版本设置。
+- 支持任务 Python 版本选择，任务默认超时为 `0`。
+- 支持 SMTP SSL、备份包下载新版接口、更新镜像源与二进制更新加速源配置。
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## 开发
+
+```bash
+flutter pub get
+flutter analyze
+flutter test
+```

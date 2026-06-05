@@ -92,6 +92,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String username,
     required String password,
     String? totpCode,
+    Map<String, dynamic>? captcha,
   }) async {
     state = state.copyWith(error: null);
     try {
@@ -99,6 +100,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         username: username,
         password: password,
         totpCode: totpCode,
+        captcha: captcha,
       );
 
       if (result.containsKey('access_token')) {
@@ -123,6 +125,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> initAdmin(String username, String password) async {
     await _authService.initAdmin(username, password);
     state = state.copyWith(needsInit: false);
+  }
+
+  Future<Map<String, dynamic>> captchaConfig({String? username}) {
+    return _authService.captchaConfig(username: username);
   }
 
   Future<void> logout() async {

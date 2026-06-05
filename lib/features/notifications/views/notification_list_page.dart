@@ -358,100 +358,242 @@ class _NotificationListPageState extends ConsumerState<NotificationListPage> {
     }
   }
 
-  static const _channelFieldMap = <String, List<({String key, String label, String hint, bool obscure})>>{
-    'webhook': [
-      (key: 'url', label: 'Webhook URL', hint: 'https://example.com/webhook', obscure: false),
-    ],
-    'email': [
-      (key: 'smtp_host', label: 'SMTP 主机', hint: 'smtp.qq.com', obscure: false),
-      (key: 'smtp_port', label: 'SMTP 端口', hint: '465', obscure: false),
-      (key: 'smtp_user', label: '邮箱账号', hint: 'user@example.com', obscure: false),
-      (key: 'smtp_pass', label: '邮箱密码/授权码', hint: 'SMTP 授权码', obscure: true),
-      (key: 'to', label: '收件人', hint: '多个收件人用逗号分隔', obscure: false),
-    ],
-    'telegram': [
-      (key: 'token', label: 'Bot Token', hint: '从 @BotFather 获取', obscure: false),
-      (key: 'chat_id', label: 'Chat ID', hint: '聊天/群组 ID', obscure: false),
-      (key: 'api_host', label: 'API 地址 (可选)', hint: '留空使用官方', obscure: false),
-    ],
-    'dingtalk': [
-      (key: 'webhook', label: 'Webhook URL', hint: 'https://oapi.dingtalk.com/robot/send?access_token=xxx', obscure: false),
-      (key: 'secret', label: '加签秘钥 (可选)', hint: 'SEC 开头的秘钥', obscure: false),
-    ],
-    'wecom': [
-      (key: 'webhook', label: 'Webhook URL', hint: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx', obscure: false),
-    ],
-    'wecom_app': [
-      (key: 'corp_id', label: '企业 ID', hint: 'CorpID', obscure: false),
-      (key: 'secret', label: '应用 Secret', hint: 'Secret', obscure: true),
-      (key: 'agent_id', label: 'Agent ID', hint: 'AgentId', obscure: false),
-      (key: 'to_user', label: '成员账号 (可选)', hint: '多个成员用 | 分隔，留空 @all', obscure: false),
-    ],
-    'bark': [
-      (key: 'key', label: 'Device Key', hint: 'Bark App 中的 Key', obscure: false),
-      (key: 'server', label: '服务器 (可选)', hint: '默认 https://api.day.app', obscure: false),
-      (key: 'sound', label: '推送声音 (可选)', hint: '如 birdsong', obscure: false),
-      (key: 'group', label: '推送分组 (可选)', hint: '消息分组名称', obscure: false),
-    ],
-    'pushplus': [
-      (key: 'token', label: 'Token', hint: 'PushPlus 用户 Token', obscure: false),
-      (key: 'topic', label: '群组编码 (可选)', hint: '一对多推送时的群组编码', obscure: false),
-    ],
-    'serverchan': [
-      (key: 'key', label: 'SendKey', hint: 'SCT...', obscure: false),
-    ],
-    'feishu': [
-      (key: 'webhook', label: 'Webhook URL', hint: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxx', obscure: false),
-      (key: 'secret', label: '加签秘钥 (可选)', hint: '签名校验秘钥', obscure: false),
-    ],
-    'gotify': [
-      (key: 'server', label: '服务器地址', hint: 'https://gotify.example.com', obscure: false),
-      (key: 'token', label: 'App Token', hint: 'Gotify 应用 Token', obscure: false),
-    ],
-    'pushdeer': [
-      (key: 'key', label: 'PushKey', hint: 'PushDeer 的 PushKey', obscure: false),
-      (key: 'server', label: '服务器 (可选)', hint: '默认 https://api2.pushdeer.com', obscure: false),
-    ],
-    'pushme': [
-      (key: 'key', label: 'PushMe Key', hint: 'push_key', obscure: false),
-    ],
-    'chanify': [
-      (key: 'token', label: 'Token', hint: 'Chanify 设备 Token', obscure: false),
-    ],
-    'igot': [
-      (key: 'key', label: 'Key', hint: 'iGot 推送 Key', obscure: false),
-    ],
-    'qmsg': [
-      (key: 'key', label: 'Qmsg Key', hint: 'Qmsg 酱的 Key', obscure: false),
-      (key: 'qq', label: 'QQ 号/群号 (可选)', hint: '留空按默认配置发送', obscure: false),
-    ],
-    'pushover': [
-      (key: 'token', label: 'API Token', hint: '应用 API Token', obscure: false),
-      (key: 'user', label: 'User Key', hint: '用户 Key', obscure: false),
-    ],
-    'discord': [
-      (key: 'webhook', label: 'Webhook URL', hint: 'https://discord.com/api/webhooks/...', obscure: false),
-    ],
-    'slack': [
-      (key: 'webhook', label: 'Webhook URL', hint: 'https://hooks.slack.com/services/...', obscure: false),
-    ],
-    'ntfy': [
-      (key: 'topic', label: 'Topic', hint: '订阅主题名称', obscure: false),
-      (key: 'server', label: '服务器 (可选)', hint: '默认 https://ntfy.sh', obscure: false),
-      (key: 'token', label: 'Token (可选)', hint: '访问令牌', obscure: false),
-    ],
-    'wxpusher': [
-      (key: 'app_token', label: 'App Token', hint: 'WxPusher 的 appToken', obscure: false),
-      (key: 'uids', label: 'UID 列表 (可选)', hint: '多个 UID 用逗号分隔', obscure: false),
-      (key: 'topic_ids', label: 'Topic ID (可选)', hint: '多个 ID 用逗号分隔', obscure: false),
-    ],
-  };
+  static const _channelFieldMap =
+      <String, List<({String key, String label, String hint, bool obscure})>>{
+        'webhook': [
+          (
+            key: 'url',
+            label: 'Webhook URL',
+            hint: 'https://example.com/webhook',
+            obscure: false,
+          ),
+        ],
+        'email': [
+          (
+            key: 'smtp_host',
+            label: 'SMTP 主机',
+            hint: 'smtp.qq.com',
+            obscure: false,
+          ),
+          (key: 'smtp_port', label: 'SMTP 端口', hint: '465', obscure: false),
+          (
+            key: 'smtp_user',
+            label: '邮箱账号',
+            hint: 'user@example.com',
+            obscure: false,
+          ),
+          (
+            key: 'smtp_pass',
+            label: '邮箱密码/授权码',
+            hint: 'SMTP 授权码',
+            obscure: true,
+          ),
+          (key: 'to', label: '收件人', hint: '多个收件人用逗号分隔', obscure: false),
+        ],
+        'telegram': [
+          (
+            key: 'token',
+            label: 'Bot Token',
+            hint: '从 @BotFather 获取',
+            obscure: false,
+          ),
+          (key: 'chat_id', label: 'Chat ID', hint: '聊天/群组 ID', obscure: false),
+          (
+            key: 'api_host',
+            label: 'API 地址 (可选)',
+            hint: '留空使用官方',
+            obscure: false,
+          ),
+        ],
+        'dingtalk': [
+          (
+            key: 'webhook',
+            label: 'Webhook URL',
+            hint: 'https://oapi.dingtalk.com/robot/send?access_token=xxx',
+            obscure: false,
+          ),
+          (
+            key: 'secret',
+            label: '加签秘钥 (可选)',
+            hint: 'SEC 开头的秘钥',
+            obscure: false,
+          ),
+        ],
+        'wecom': [
+          (
+            key: 'webhook',
+            label: 'Webhook URL',
+            hint: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx',
+            obscure: false,
+          ),
+        ],
+        'wecom_app': [
+          (key: 'corp_id', label: '企业 ID', hint: 'CorpID', obscure: false),
+          (key: 'secret', label: '应用 Secret', hint: 'Secret', obscure: true),
+          (key: 'agent_id', label: 'Agent ID', hint: 'AgentId', obscure: false),
+          (
+            key: 'to_user',
+            label: '成员账号 (可选)',
+            hint: '多个成员用 | 分隔，留空 @all',
+            obscure: false,
+          ),
+        ],
+        'bark': [
+          (
+            key: 'key',
+            label: 'Device Key',
+            hint: 'Bark App 中的 Key',
+            obscure: false,
+          ),
+          (
+            key: 'server',
+            label: '服务器 (可选)',
+            hint: '默认 https://api.day.app',
+            obscure: false,
+          ),
+          (
+            key: 'sound',
+            label: '推送声音 (可选)',
+            hint: '如 birdsong',
+            obscure: false,
+          ),
+          (key: 'group', label: '推送分组 (可选)', hint: '消息分组名称', obscure: false),
+        ],
+        'pushplus': [
+          (
+            key: 'token',
+            label: 'Token',
+            hint: 'PushPlus 用户 Token',
+            obscure: false,
+          ),
+          (
+            key: 'topic',
+            label: '群组编码 (可选)',
+            hint: '一对多推送时的群组编码',
+            obscure: false,
+          ),
+        ],
+        'serverchan': [
+          (key: 'key', label: 'SendKey', hint: 'SCT...', obscure: false),
+        ],
+        'feishu': [
+          (
+            key: 'webhook',
+            label: 'Webhook URL',
+            hint: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxx',
+            obscure: false,
+          ),
+          (key: 'secret', label: '加签秘钥 (可选)', hint: '签名校验秘钥', obscure: false),
+        ],
+        'gotify': [
+          (
+            key: 'server',
+            label: '服务器地址',
+            hint: 'https://gotify.example.com',
+            obscure: false,
+          ),
+          (
+            key: 'token',
+            label: 'App Token',
+            hint: 'Gotify 应用 Token',
+            obscure: false,
+          ),
+        ],
+        'pushdeer': [
+          (
+            key: 'key',
+            label: 'PushKey',
+            hint: 'PushDeer 的 PushKey',
+            obscure: false,
+          ),
+          (
+            key: 'server',
+            label: '服务器 (可选)',
+            hint: '默认 https://api2.pushdeer.com',
+            obscure: false,
+          ),
+        ],
+        'pushme': [
+          (key: 'key', label: 'PushMe Key', hint: 'push_key', obscure: false),
+        ],
+        'chanify': [
+          (
+            key: 'token',
+            label: 'Token',
+            hint: 'Chanify 设备 Token',
+            obscure: false,
+          ),
+        ],
+        'igot': [
+          (key: 'key', label: 'Key', hint: 'iGot 推送 Key', obscure: false),
+        ],
+        'qmsg': [
+          (key: 'key', label: 'Qmsg Key', hint: 'Qmsg 酱的 Key', obscure: false),
+          (key: 'qq', label: 'QQ 号/群号 (可选)', hint: '留空按默认配置发送', obscure: false),
+        ],
+        'pushover': [
+          (
+            key: 'token',
+            label: 'API Token',
+            hint: '应用 API Token',
+            obscure: false,
+          ),
+          (key: 'user', label: 'User Key', hint: '用户 Key', obscure: false),
+        ],
+        'discord': [
+          (
+            key: 'webhook',
+            label: 'Webhook URL',
+            hint: 'https://discord.com/api/webhooks/...',
+            obscure: false,
+          ),
+        ],
+        'slack': [
+          (
+            key: 'webhook',
+            label: 'Webhook URL',
+            hint: 'https://hooks.slack.com/services/...',
+            obscure: false,
+          ),
+        ],
+        'ntfy': [
+          (key: 'topic', label: 'Topic', hint: '订阅主题名称', obscure: false),
+          (
+            key: 'server',
+            label: '服务器 (可选)',
+            hint: '默认 https://ntfy.sh',
+            obscure: false,
+          ),
+          (key: 'token', label: 'Token (可选)', hint: '访问令牌', obscure: false),
+        ],
+        'wxpusher': [
+          (
+            key: 'app_token',
+            label: 'App Token',
+            hint: 'WxPusher 的 appToken',
+            obscure: false,
+          ),
+          (
+            key: 'uids',
+            label: 'UID 列表 (可选)',
+            hint: '多个 UID 用逗号分隔',
+            obscure: false,
+          ),
+          (
+            key: 'topic_ids',
+            label: 'Topic ID (可选)',
+            hint: '多个 ID 用逗号分隔',
+            obscure: false,
+          ),
+        ],
+      };
 
   void _showChannelDialog({NotifyChannel? channel}) {
     final messenger = ScaffoldMessenger.of(context);
     final nameController = TextEditingController(text: channel?.name ?? '');
     final existingConfig = Map<String, dynamic>.from(channel?.config ?? {});
     final fieldControllers = <String, TextEditingController>{};
+    bool smtpSsl = _configBool(existingConfig['smtp_ssl']);
 
     final availableTypes = ref.read(notificationListProvider).types.isNotEmpty
         ? ref.read(notificationListProvider).types
@@ -471,7 +613,8 @@ class _NotificationListPageState extends ConsumerState<NotificationListPage> {
     TextEditingController getFieldController(String key) {
       return fieldControllers.putIfAbsent(
         key,
-        () => TextEditingController(text: existingConfig[key]?.toString() ?? ''),
+        () =>
+            TextEditingController(text: existingConfig[key]?.toString() ?? ''),
       );
     }
 
@@ -485,7 +628,12 @@ class _NotificationListPageState extends ConsumerState<NotificationListPage> {
           builder: (ctx, setSheetState) {
             final fields = _channelFieldMap[selectedType] ?? [];
             return Padding(
-              padding: EdgeInsets.fromLTRB(20, 0, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                0,
+                20,
+                MediaQuery.of(ctx).viewInsets.bottom + 20,
+              ),
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -493,18 +641,30 @@ class _NotificationListPageState extends ConsumerState<NotificationListPage> {
                   children: [
                     Text(
                       channel == null ? '新建通知渠道' : '编辑通知渠道',
-                      style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                      style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 16),
                     TextField(
                       controller: nameController,
-                      decoration: const InputDecoration(labelText: '渠道名称', hintText: '如：我的Bark'),
+                      decoration: const InputDecoration(
+                        labelText: '渠道名称',
+                        hintText: '如：我的Bark',
+                      ),
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       initialValue: selectedType,
                       decoration: const InputDecoration(labelText: '渠道类型'),
-                      items: availableTypes.map((item) => DropdownMenuItem(value: item.type, child: Text(item.name))).toList(),
+                      items: availableTypes
+                          .map(
+                            (item) => DropdownMenuItem(
+                              value: item.type,
+                              child: Text(item.name),
+                            ),
+                          )
+                          .toList(),
                       onChanged: (value) {
                         if (value != null) {
                           setSheetState(() {
@@ -518,14 +678,31 @@ class _NotificationListPageState extends ConsumerState<NotificationListPage> {
                       const SizedBox(height: 16),
                       const Divider(height: 1),
                       const SizedBox(height: 12),
-                      ...fields.map((f) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: TextField(
-                          controller: getFieldController(f.key),
-                          obscureText: f.obscure,
-                          decoration: InputDecoration(labelText: f.label, hintText: f.hint),
+                      ...fields.map(
+                        (f) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: TextField(
+                            controller: getFieldController(f.key),
+                            obscureText: f.obscure,
+                            decoration: InputDecoration(
+                              labelText: f.label,
+                              hintText: f.hint,
+                            ),
+                          ),
                         ),
-                      )),
+                      ),
+                      if (selectedType == 'email')
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('启用 SMTP SSL'),
+                          subtitle: const Text(
+                            '465 端口通常需要开启，25/587 可按邮箱服务要求选择',
+                          ),
+                          value: smtpSsl,
+                          onChanged: (value) {
+                            setSheetState(() => smtpSsl = value);
+                          },
+                        ),
                     ],
                     if (fields.isEmpty) ...[
                       const SizedBox(height: 12),
@@ -538,7 +715,10 @@ class _NotificationListPageState extends ConsumerState<NotificationListPage> {
                           alignLabelWithHint: true,
                           hintText: '{"key": "value"}',
                         ),
-                        style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 13,
+                        ),
                       ),
                     ],
                     const SizedBox(height: 20),
@@ -546,7 +726,9 @@ class _NotificationListPageState extends ConsumerState<NotificationListPage> {
                       onPressed: () async {
                         final name = nameController.text.trim();
                         if (name.isEmpty) {
-                          messenger.showSnackBar(const SnackBar(content: Text('名称不能为空')));
+                          messenger.showSnackBar(
+                            const SnackBar(content: Text('名称不能为空')),
+                          );
                           return;
                         }
 
@@ -557,9 +739,15 @@ class _NotificationListPageState extends ConsumerState<NotificationListPage> {
                             final val = getFieldController(f.key).text.trim();
                             if (val.isNotEmpty) configMap[f.key] = val;
                           }
+                          if (selectedType == 'email') {
+                            configMap['smtp_ssl'] = smtpSsl;
+                          }
                         } else {
-                          final raw = getFieldController('__raw_json__').text.trim();
-                          configMap = _parseConfig(raw.isEmpty ? '{}' : raw) ?? {};
+                          final raw = getFieldController(
+                            '__raw_json__',
+                          ).text.trim();
+                          configMap =
+                              _parseConfig(raw.isEmpty ? '{}' : raw) ?? {};
                         }
 
                         final payload = {
@@ -570,19 +758,38 @@ class _NotificationListPageState extends ConsumerState<NotificationListPage> {
 
                         try {
                           if (channel == null) {
-                            await ref.read(notificationListProvider.notifier).create(payload);
+                            await ref
+                                .read(notificationListProvider.notifier)
+                                .create(payload);
                           } else {
-                            await ref.read(notificationListProvider.notifier).update(channel.id, payload);
+                            await ref
+                                .read(notificationListProvider.notifier)
+                                .update(channel.id, payload);
                           }
                           if (!mounted) return;
                           Navigator.of(ctx).pop();
-                          messenger.showSnackBar(SnackBar(content: Text(channel == null ? '创建成功' : '保存成功')));
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text(channel == null ? '创建成功' : '保存成功'),
+                            ),
+                          );
                         } catch (error) {
                           if (!mounted) return;
-                          messenger.showSnackBar(SnackBar(content: Text(_extractMessage(error, channel == null ? '创建失败' : '保存失败'))));
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                _extractMessage(
+                                  error,
+                                  channel == null ? '创建失败' : '保存失败',
+                                ),
+                              ),
+                            ),
+                          );
                         }
                       },
-                      style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(0, 48),
+                      ),
                       child: Text(channel == null ? '创建' : '保存'),
                     ),
                   ],
@@ -762,6 +969,14 @@ Map<String, dynamic>? _parseConfig(String raw) {
   } catch (_) {}
 
   return null;
+}
+
+bool _configBool(dynamic value) {
+  if (value is bool) {
+    return value;
+  }
+  final text = value?.toString().trim().toLowerCase() ?? '';
+  return text == 'true' || text == '1' || text == 'yes' || text == 'on';
 }
 
 String _extractMessage(dynamic error, String fallback) {

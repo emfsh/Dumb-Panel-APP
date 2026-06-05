@@ -7,6 +7,7 @@ class Task {
   final String cronExpression;
   final List<String> cronExpressions;
   final String taskType;
+  final String pythonVersion;
   final double status;
   final String labels;
   final List<String> displayLabels;
@@ -38,6 +39,7 @@ class Task {
     required this.cronExpression,
     this.cronExpressions = const [],
     this.taskType = 'cron',
+    this.pythonVersion = '3.12',
     required this.status,
     this.labels = '',
     this.displayLabels = const [],
@@ -102,7 +104,9 @@ class Task {
   }
 
   List<String> get userLabelsForDisplay {
-    final visible = labelsForDisplay.where((label) => !isGroupLabel(label)).toList();
+    final visible = labelsForDisplay
+        .where((label) => !isGroupLabel(label))
+        .toList();
     final group = groupName;
     if (group != null && group.isNotEmpty) {
       visible.remove(group);
@@ -123,6 +127,7 @@ class Task {
                 .toList()
           : const [],
       taskType: json['task_type']?.toString() ?? 'cron',
+      pythonVersion: json['python_version']?.toString() ?? '3.12',
       status: _double(json['status']),
       labels: json['labels'] is List
           ? (json['labels'] as List).join(',')
@@ -161,6 +166,7 @@ class Task {
     'command': command,
     'cron_expression': cronExpression,
     'task_type': taskType,
+    'python_version': pythonVersion,
     'labels': labels,
     'timeout': timeout,
     'random_delay_seconds': randomDelaySeconds,

@@ -21,7 +21,6 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
   bool _checking = false;
   bool _savingConfigs = false;
 
-  final _timeoutC = TextEditingController();
   final _concurrencyC = TextEditingController();
   final _logRetentionC = TextEditingController();
   final _logMaxSizeC = TextEditingController();
@@ -29,7 +28,25 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
   final _fileSuffixC = TextEditingController();
   final _editorBackgroundColorC = TextEditingController();
   final _proxyUrlC = TextEditingController();
+  final _updateImageMirrorC = TextEditingController();
+  final _binaryUpdateProxyC = TextEditingController();
   bool _autoInstallDeps = false;
+
+  static const _dockerMirrorOptions = [
+    'https://docker.1ms.run',
+    'https://docker.1panel.live',
+    'https://docker.sparkcr.cn',
+    'https://hub.rat.dev',
+    'https://dockerproxy.net',
+    'https://mirror.ccs.tencentyun.com',
+  ];
+
+  static const _binaryProxyOptions = [
+    'https://gh-proxy.org/',
+    'https://v4.gh-proxy.org/',
+    'http://gh.301.ee/',
+    'https://ghproxy.homeboyc.cn/',
+  ];
 
   @override
   void initState() {
@@ -39,7 +56,6 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
 
   @override
   void dispose() {
-    _timeoutC.dispose();
     _concurrencyC.dispose();
     _logRetentionC.dispose();
     _logMaxSizeC.dispose();
@@ -47,6 +63,8 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
     _fileSuffixC.dispose();
     _editorBackgroundColorC.dispose();
     _proxyUrlC.dispose();
+    _updateImageMirrorC.dispose();
+    _binaryUpdateProxyC.dispose();
     super.dispose();
   }
 
@@ -65,10 +83,6 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
           : <String, dynamic>{};
 
       // Parse task execution configs
-      _timeoutC.text = _getConfigValueAny(configs, [
-        'command_timeout',
-        'default_timeout',
-      ], '86400');
       _concurrencyC.text = _getConfigValueAny(configs, [
         'max_concurrent_tasks',
         'max_concurrency',
@@ -91,6 +105,16 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
       _autoInstallDeps =
           _getConfigValue(configs, 'auto_install_deps', 'false') == 'true';
       _proxyUrlC.text = _getConfigValue(configs, 'proxy_url', '');
+      _updateImageMirrorC.text = _getConfigValue(
+        configs,
+        'update_image_mirror',
+        '',
+      );
+      _binaryUpdateProxyC.text = _getConfigValue(
+        configs,
+        'binary_update_proxy',
+        '',
+      );
 
       setState(() {
         _versionInfo = versionData is Map<String, dynamic> ? versionData : null;
@@ -233,11 +257,11 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
           context,
         ).showSnackBar(const SnackBar(content: Text('更新已启动，面板将自动重启')));
       }
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('更新失败')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(extractErrorMessage(error, '更新失败'))),
+        );
       }
     }
   }
@@ -292,6 +316,72 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
     }
   }
 
+  Future<void> _showMirrorOptions({
+    required String title,
+    required List<String> urls,
+    required TextEditingController controller,
+    String? intro,
+  }) async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                title,
+                style: Theme.of(
+                  ctx,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              if (intro != null && intro.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  intro,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.5,
+                    color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              ...urls.map(
+                (url) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx, url),
+                    style: OutlinedButton.styleFrom(
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                    ),
+                    child: Text(
+                      url,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected != null) {
+      setState(() => controller.text = selected);
+    }
+  }
+
   Future<void> _saveTaskConfigs() async {
     setState(() => _savingConfigs = true);
     try {
@@ -299,7 +389,6 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
         ApiEndpoints.configsBatch,
         data: {
           'configs': {
-            'command_timeout': _timeoutC.text.trim(),
             'max_concurrent_tasks': _concurrencyC.text.trim(),
             'log_retention_days': _logRetentionC.text.trim(),
             'max_log_content_size': _logMaxSizeC.text.trim(),
@@ -308,6 +397,8 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
             'auto_install_deps': _autoInstallDeps ? 'true' : 'false',
             'editor_background_color': _editorBackgroundColorC.text.trim(),
             'proxy_url': _proxyUrlC.text.trim(),
+            'update_image_mirror': _updateImageMirrorC.text.trim(),
+            'binary_update_proxy': _binaryUpdateProxyC.text.trim(),
           },
         },
       );
@@ -430,27 +521,54 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
                             isLight: isLight,
                             child: Column(
                               children: [
+                                _ConfigField(
+                                  label: '并发数',
+                                  hint: '5',
+                                  controller: _concurrencyC,
+                                  isLight: isLight,
+                                ),
+                                const SizedBox(height: 12),
                                 Row(
                                   children: [
-                                    Expanded(child: _ConfigField(label: '默认超时(秒)', hint: '86400', controller: _timeoutC, isLight: isLight)),
+                                    Expanded(
+                                      child: _ConfigField(
+                                        label: '日志保留(天)',
+                                        hint: '7',
+                                        controller: _logRetentionC,
+                                        isLight: isLight,
+                                      ),
+                                    ),
                                     const SizedBox(width: 12),
-                                    Expanded(child: _ConfigField(label: '并发数', hint: '5', controller: _concurrencyC, isLight: isLight)),
+                                    Expanded(
+                                      child: _ConfigField(
+                                        label: '日志上限(字节)',
+                                        hint: '102400',
+                                        controller: _logMaxSizeC,
+                                        isLight: isLight,
+                                      ),
+                                    ),
                                   ],
                                 ),
                                 const SizedBox(height: 12),
                                 Row(
                                   children: [
-                                    Expanded(child: _ConfigField(label: '日志保留(天)', hint: '7', controller: _logRetentionC, isLight: isLight)),
+                                    Expanded(
+                                      child: _ConfigField(
+                                        label: '随机延迟(秒)',
+                                        hint: '0 不延迟',
+                                        controller: _randomDelayC,
+                                        isLight: isLight,
+                                      ),
+                                    ),
                                     const SizedBox(width: 12),
-                                    Expanded(child: _ConfigField(label: '日志上限(字节)', hint: '102400', controller: _logMaxSizeC, isLight: isLight)),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    Expanded(child: _ConfigField(label: '随机延迟(秒)', hint: '0 不延迟', controller: _randomDelayC, isLight: isLight)),
-                                    const SizedBox(width: 12),
-                                    Expanded(child: _ConfigField(label: '延迟文件后缀', hint: 'js py', controller: _fileSuffixC, isLight: isLight)),
+                                    Expanded(
+                                      child: _ConfigField(
+                                        label: '延迟文件后缀',
+                                        hint: 'js py',
+                                        controller: _fileSuffixC,
+                                        isLight: isLight,
+                                      ),
+                                    ),
                                   ],
                                 ),
                                 const SizedBox(height: 12),
@@ -458,9 +576,21 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
                                   value: _autoInstallDeps,
                                   contentPadding: EdgeInsets.zero,
                                   dense: true,
-                                  title: const Text('自动安装缺失依赖', style: TextStyle(fontSize: 13)),
-                                  subtitle: Text('运行失败时自动安装', style: TextStyle(fontSize: 11, color: isLight ? AppColors.slate500 : AppColors.slate400)),
-                                  onChanged: (v) => setState(() => _autoInstallDeps = v),
+                                  title: const Text(
+                                    '自动安装缺失依赖',
+                                    style: TextStyle(fontSize: 13),
+                                  ),
+                                  subtitle: Text(
+                                    '运行失败时自动安装',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: isLight
+                                          ? AppColors.slate500
+                                          : AppColors.slate400,
+                                    ),
+                                  ),
+                                  onChanged: (v) =>
+                                      setState(() => _autoInstallDeps = v),
                                 ),
                               ],
                             ),
@@ -473,7 +603,12 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
                           const SizedBox(height: 8),
                           _Card(
                             isLight: isLight,
-                            child: _ConfigField(label: '日志背景色', hint: '#111827 或 rgba(...)，留空默认', controller: _editorBackgroundColorC, isLight: isLight),
+                            child: _ConfigField(
+                              label: '日志背景色',
+                              hint: '#111827 或 rgba(...)，留空默认',
+                              controller: _editorBackgroundColorC,
+                              isLight: isLight,
+                            ),
                           ),
 
                           const SizedBox(height: 20),
@@ -483,7 +618,58 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
                           const SizedBox(height: 8),
                           _Card(
                             isLight: isLight,
-                            child: _ConfigField(label: '代理地址', hint: 'http://127.0.0.1:7890，留空不使用代理', controller: _proxyUrlC, isLight: isLight),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _ConfigField(
+                                  label: '代理地址',
+                                  hint: 'http://127.0.0.1:7890，留空不使用代理',
+                                  controller: _proxyUrlC,
+                                  isLight: isLight,
+                                ),
+                                const SizedBox(height: 10),
+                                _InlineHint(
+                                  isLight: isLight,
+                                  text:
+                                      '仅当服务器访问 GitHub、npm、pip、Docker 镜像等外部网络需要代理时填写；留空表示面板直连，不影响局域网访问面板。',
+                                ),
+                                const SizedBox(height: 14),
+                                _MirrorField(
+                                  label: '系统更新镜像源',
+                                  hint: 'https://docker.example.com，留空直连',
+                                  controller: _updateImageMirrorC,
+                                  isLight: isLight,
+                                  onPick: () => _showMirrorOptions(
+                                    title: '系统更新镜像源',
+                                    urls: _dockerMirrorOptions,
+                                    controller: _updateImageMirrorC,
+                                    intro:
+                                        'Docker 部署更新使用。也可以到 https://status.anye.xyz/ 查看更多镜像源状态后手动填写。',
+                                  ),
+                                  onClear: () => setState(
+                                    () => _updateImageMirrorC.clear(),
+                                  ),
+                                ),
+                                const SizedBox(height: 14),
+                                _MirrorField(
+                                  label: '二进制更新加速源',
+                                  hint:
+                                      'https://gh-proxy.example.com/，留空直连 GitHub',
+                                  controller: _binaryUpdateProxyC,
+                                  isLight: isLight,
+                                  onPick: () => _showMirrorOptions(
+                                    title: '二进制更新加速源',
+                                    urls: _binaryProxyOptions,
+                                    controller: _binaryUpdateProxyC,
+                                    intro:
+                                        '二进制部署更新使用，用于加速 GitHub Release 更新包下载。',
+                                  ),
+                                  onClear: () => setState(
+                                    () => _binaryUpdateProxyC.clear(),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
 
                           const SizedBox(height: 16),
@@ -491,7 +677,9 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
                             width: double.infinity,
                             height: 44,
                             child: FilledButton(
-                              onPressed: _savingConfigs ? null : _saveTaskConfigs,
+                              onPressed: _savingConfigs
+                                  ? null
+                                  : _saveTaskConfigs,
                               child: Text(_savingConfigs ? '保存中...' : '保存配置'),
                             ),
                           ),
@@ -501,11 +689,30 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
                           // ── 系统操作 ──
                           _SectionTitle('系统操作'),
                           const SizedBox(height: 8),
-                          _ActionBtn(icon: Icons.backup, title: '备份恢复', subtitle: '创建备份、恢复、管理备份文件', isLight: isLight, onTap: () => context.push('/backup')),
+                          _ActionBtn(
+                            icon: Icons.backup,
+                            title: '备份恢复',
+                            subtitle: '创建备份、恢复、管理备份文件',
+                            isLight: isLight,
+                            onTap: () => context.push('/backup'),
+                          ),
                           const SizedBox(height: 8),
-                          _ActionBtn(icon: Icons.article_outlined, title: '面板日志', subtitle: '查看面板运行日志，支持级别与关键字筛选', isLight: isLight, onTap: () => context.push('/panel-log')),
+                          _ActionBtn(
+                            icon: Icons.article_outlined,
+                            title: '面板日志',
+                            subtitle: '查看面板运行日志，支持级别与关键字筛选',
+                            isLight: isLight,
+                            onTap: () => context.push('/panel-log'),
+                          ),
                           const SizedBox(height: 8),
-                          _ActionBtn(icon: Icons.restart_alt, title: '重启面板', subtitle: '重启面板服务，运行中任务将中断', isLight: isLight, onTap: _restart, danger: true),
+                          _ActionBtn(
+                            icon: Icons.restart_alt,
+                            title: '重启面板',
+                            subtitle: '重启面板服务，运行中任务将中断',
+                            isLight: isLight,
+                            onTap: _restart,
+                            danger: true,
+                          ),
                         ],
                       ),
                     ),
@@ -555,6 +762,43 @@ class _Card extends StatelessWidget {
         ),
       ),
       child: child,
+    );
+  }
+}
+
+class _InlineHint extends StatelessWidget {
+  final bool isLight;
+  final String text;
+
+  const _InlineHint({required this.isLight, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.blue500.withAlpha(12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.blue500.withAlpha(30)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline, size: 16, color: AppColors.blue500),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.5,
+                color: isLight ? AppColors.slate600 : AppColors.slate300,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -634,6 +878,68 @@ class _ConfigField extends StatelessWidget {
             fontSize: 10,
             color: isLight ? AppColors.slate400 : AppColors.slate500,
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MirrorField extends StatelessWidget {
+  final String label;
+  final String hint;
+  final TextEditingController controller;
+  final bool isLight;
+  final VoidCallback onPick;
+  final VoidCallback onClear;
+
+  const _MirrorField({
+    required this.label,
+    required this.hint,
+    required this.controller,
+    required this.isLight,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            TextButton(onPressed: onPick, child: const Text('配置')),
+            if (controller.text.trim().isNotEmpty)
+              TextButton(onPressed: onClear, child: const Text('清空')),
+          ],
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: TextStyle(
+              fontSize: 11,
+              color: isLight ? AppColors.slate400 : AppColors.slate500,
+            ),
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
+            ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+          style: const TextStyle(fontSize: 13),
+          keyboardType: TextInputType.url,
         ),
       ],
     );

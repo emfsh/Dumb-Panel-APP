@@ -27,7 +27,7 @@ class ApiEndpoints {
   static const String backups = '$baseApi/system/backups';
   static const String backupUpload = '$baseApi/system/backup/upload';
   static String backupDownload(String filename) =>
-      '$baseApi/system/backup/download/${Uri.encodeComponent(filename)}';
+      '$baseApi/system/backup/download?filename=${Uri.encodeQueryComponent(filename)}';
   static const String restore = '$baseApi/system/restore';
   static const String restoreProgress = '$baseApi/system/restore/progress';
 
@@ -81,8 +81,10 @@ class ApiEndpoints {
       '$baseApi/scripts/versions/$id/rollback';
   static const String scriptsRun = '$baseApi/scripts/run';
   static const String scriptsRunCode = '$baseApi/scripts/run-code';
-  static String scriptsRunLogs(String runId) => '$baseApi/scripts/run/$runId/logs';
-  static String scriptsRunStop(String runId) => '$baseApi/scripts/run/$runId/stop';
+  static String scriptsRunLogs(String runId) =>
+      '$baseApi/scripts/run/$runId/logs';
+  static String scriptsRunStop(String runId) =>
+      '$baseApi/scripts/run/$runId/stop';
   static String scriptsRunClear(String runId) => '$baseApi/scripts/run/$runId';
   static const String scriptsFormat = '$baseApi/scripts/format';
 
@@ -141,6 +143,9 @@ class ApiEndpoints {
   static const String depsPip = '$baseApi/deps/pip';
   static const String depsNpm = '$baseApi/deps/npm';
   static const String depsMirrors = '$baseApi/deps/mirrors';
+  static const String depsPythonRuntimes = '$baseApi/deps/python-runtimes';
+  static const String depsPythonRuntimeDefault =
+      '$baseApi/deps/python-runtime-default';
 
   // Users
   static const String users = '$baseApi/users';

@@ -3,6 +3,7 @@ class Dependency {
   final String name;
   final String version;
   final String type;
+  final String pythonVersion;
   final String status;
   final String? remark;
   final String? log;
@@ -14,6 +15,7 @@ class Dependency {
     required this.name,
     this.version = '',
     this.type = 'nodejs',
+    this.pythonVersion = '',
     this.status = 'installed',
     this.remark,
     this.log,
@@ -52,6 +54,7 @@ class Dependency {
       name: json['name']?.toString() ?? '',
       version: json['version']?.toString() ?? '',
       type: json['type']?.toString() ?? 'nodejs',
+      pythonVersion: json['python_version']?.toString() ?? '',
       status: json['status']?.toString() ?? 'installed',
       remark: json['remark']?.toString(),
       log: json['log']?.toString(),
@@ -64,6 +67,7 @@ class Dependency {
     'name': name,
     'version': version,
     'type': type,
+    'python_version': pythonVersion,
     'remark': remark,
     'status': status,
     'log': log,

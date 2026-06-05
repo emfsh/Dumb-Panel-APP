@@ -55,10 +55,14 @@ class AuthService {
     required String username,
     required String password,
     String? totpCode,
+    Map<String, dynamic>? captcha,
   }) async {
     final data = <String, dynamic>{'username': username, 'password': password};
     if (totpCode != null && totpCode.isNotEmpty) {
       data['totp_code'] = totpCode;
+    }
+    if (captcha != null && captcha.isNotEmpty) {
+      data['captcha'] = captcha;
     }
 
     final response = await _dio.post(
@@ -81,6 +85,26 @@ class AuthService {
     }
 
     return map;
+  }
+
+  Future<Map<String, dynamic>> captchaConfig({String? username}) async {
+    final response = await _dio.get(
+      ApiEndpoints.captchaConfig,
+      queryParameters: username != null && username.trim().isNotEmpty
+          ? {'username': username.trim()}
+          : null,
+      options: Options(
+        validateStatus: (status) => status != null && status < 500,
+      ),
+    );
+    final result = _extractData(response.data);
+    if (result is Map<String, dynamic>) {
+      return result;
+    }
+    if (result is Map) {
+      return Map<String, dynamic>.from(result);
+    }
+    return <String, dynamic>{};
   }
 
   Future<void> logout() async {

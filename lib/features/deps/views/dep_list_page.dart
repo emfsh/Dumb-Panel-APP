@@ -23,22 +23,77 @@ class DepListState {
   final List<Dependency> items;
   final bool loading;
   final String selectedType;
+  final String selectedPythonVersion;
+  final String pythonDefaultVersion;
+  final List<PythonRuntimeInfo> pythonRuntimes;
+  final bool runtimeLoading;
 
   const DepListState({
     this.items = const [],
     this.loading = false,
     this.selectedType = 'nodejs',
+    this.selectedPythonVersion = '3.12',
+    this.pythonDefaultVersion = '3.12',
+    this.pythonRuntimes = const [],
+    this.runtimeLoading = false,
   });
 
   DepListState copyWith({
     List<Dependency>? items,
     bool? loading,
     String? selectedType,
+    String? selectedPythonVersion,
+    String? pythonDefaultVersion,
+    List<PythonRuntimeInfo>? pythonRuntimes,
+    bool? runtimeLoading,
   }) {
     return DepListState(
       items: items ?? this.items,
       loading: loading ?? this.loading,
       selectedType: selectedType ?? this.selectedType,
+      selectedPythonVersion:
+          selectedPythonVersion ?? this.selectedPythonVersion,
+      pythonDefaultVersion: pythonDefaultVersion ?? this.pythonDefaultVersion,
+      pythonRuntimes: pythonRuntimes ?? this.pythonRuntimes,
+      runtimeLoading: runtimeLoading ?? this.runtimeLoading,
+    );
+  }
+}
+
+class PythonRuntimeInfo {
+  final String version;
+  final String label;
+  final bool isDefault;
+  final String venvPath;
+  final bool venvHealthy;
+  final String pythonPath;
+  final String pipPath;
+  final bool available;
+  final String message;
+
+  const PythonRuntimeInfo({
+    required this.version,
+    required this.label,
+    this.isDefault = false,
+    this.venvPath = '',
+    this.venvHealthy = false,
+    this.pythonPath = '',
+    this.pipPath = '',
+    this.available = false,
+    this.message = '',
+  });
+
+  factory PythonRuntimeInfo.fromJson(Map<String, dynamic> json) {
+    return PythonRuntimeInfo(
+      version: json['version']?.toString() ?? '',
+      label: json['label']?.toString() ?? '',
+      isDefault: json['default'] == true,
+      venvPath: json['venv_path']?.toString() ?? '',
+      venvHealthy: json['venv_healthy'] == true,
+      pythonPath: json['python_path']?.toString() ?? '',
+      pipPath: json['pip_path']?.toString() ?? '',
+      available: json['available'] == true,
+      message: json['message']?.toString() ?? '',
     );
   }
 }
@@ -109,20 +164,35 @@ class DepMirrorConfig {
 class DepListNotifier extends StateNotifier<DepListState> {
   DepListNotifier() : super(const DepListState());
 
-  Future<List<Dependency>> fetchByType(String type) async {
+  Future<List<Dependency>> fetchByType(
+    String type, {
+    String? pythonVersion,
+  }) async {
+    final params = <String, dynamic>{'page': 1, 'page_size': 200, 'type': type};
+    if (type == 'python' && (pythonVersion ?? '').trim().isNotEmpty) {
+      params['python_version'] = pythonVersion!.trim();
+    }
     final resp = await DioClient.instance.dio.get(
       ApiEndpoints.deps,
-      queryParameters: {'page': 1, 'page_size': 200, 'type': type},
+      queryParameters: params,
     );
     final paginated = extractPaginated(resp.data);
     return paginated.items.map(Dependency.fromJson).toList();
   }
 
-  Future<void> load({String? type}) async {
+  Future<void> load({String? type, String? pythonVersion}) async {
     final nextType = type ?? state.selectedType;
-    state = state.copyWith(selectedType: nextType, loading: true);
+    final nextPythonVersion = pythonVersion ?? state.selectedPythonVersion;
+    state = state.copyWith(
+      selectedType: nextType,
+      selectedPythonVersion: nextPythonVersion,
+      loading: true,
+    );
     try {
-      final items = await fetchByType(nextType);
+      final items = await fetchByType(
+        nextType,
+        pythonVersion: nextType == 'python' ? nextPythonVersion : null,
+      );
       state = state.copyWith(items: items, loading: false);
     } catch (_) {
       state = state.copyWith(loading: false);
@@ -131,6 +201,63 @@ class DepListNotifier extends StateNotifier<DepListState> {
 
   Future<void> setType(String type) async {
     await load(type: type);
+  }
+
+  Future<void> setPythonVersion(String version) async {
+    await load(type: 'python', pythonVersion: version);
+  }
+
+  Future<void> loadPythonRuntimes() async {
+    state = state.copyWith(runtimeLoading: true);
+    try {
+      final resp = await DioClient.instance.dio.get(
+        ApiEndpoints.depsPythonRuntimes,
+      );
+      final raw = resp.data;
+      final map = raw is Map<String, dynamic>
+          ? raw
+          : raw is Map
+          ? Map<String, dynamic>.from(raw)
+          : <String, dynamic>{};
+      final runtimeData = map['data'];
+      final runtimes = runtimeData is List
+          ? runtimeData
+                .whereType<Map>()
+                .map(
+                  (item) => PythonRuntimeInfo.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
+                .where((item) => item.version.isNotEmpty)
+                .toList()
+          : <PythonRuntimeInfo>[];
+      final defaultVersion =
+          map['default_version']?.toString().trim().isNotEmpty == true
+          ? map['default_version'].toString().trim()
+          : state.pythonDefaultVersion;
+      final selectedStillExists = runtimes.any(
+        (runtime) => runtime.version == state.selectedPythonVersion,
+      );
+      state = state.copyWith(
+        pythonRuntimes: runtimes,
+        pythonDefaultVersion: defaultVersion,
+        selectedPythonVersion: selectedStillExists
+            ? state.selectedPythonVersion
+            : defaultVersion,
+        runtimeLoading: false,
+      );
+    } catch (_) {
+      state = state.copyWith(runtimeLoading: false);
+    }
+  }
+
+  Future<void> setDefaultPythonRuntime(String version) async {
+    await DioClient.instance.dio.put(
+      ApiEndpoints.depsPythonRuntimeDefault,
+      data: {'version': version},
+    );
+    await loadPythonRuntimes();
+    await load(type: 'python', pythonVersion: version);
   }
 
   Future<void> delete(int id, {bool force = false}) async {
@@ -165,7 +292,11 @@ class DepListNotifier extends StateNotifier<DepListState> {
   }) async {
     await DioClient.instance.dio.post(
       ApiEndpoints.deps,
-      data: {'type': type, 'names': names},
+      data: {
+        'type': type,
+        'names': names,
+        if (type == 'python') 'python_version': state.selectedPythonVersion,
+      },
     );
     await load();
   }
@@ -234,6 +365,7 @@ class _DepListPageState extends ConsumerState<DepListPage> {
   }
 
   Future<void> _loadPageData() async {
+    await ref.read(depListProvider.notifier).loadPythonRuntimes();
     await Future.wait([
       ref.read(depListProvider.notifier).load(),
       _loadCounts(),
@@ -243,10 +375,14 @@ class _DepListPageState extends ConsumerState<DepListPage> {
 
   Future<void> _loadCounts() async {
     final notifier = ref.read(depListProvider.notifier);
+    final state = ref.read(depListProvider);
     try {
       final results = await Future.wait([
         notifier.fetchByType('nodejs'),
-        notifier.fetchByType('python'),
+        notifier.fetchByType(
+          'python',
+          pythonVersion: state.selectedPythonVersion,
+        ),
         notifier.fetchByType('linux'),
       ]);
       if (!mounted) {
@@ -323,6 +459,31 @@ class _DepListPageState extends ConsumerState<DepListPage> {
     await _loadCounts();
   }
 
+  Future<void> _changePythonVersion(String version) async {
+    await ref.read(depListProvider.notifier).setPythonVersion(version);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _selectedIds.clear();
+      _statusFilter = null;
+    });
+    await _loadCounts();
+  }
+
+  Future<void> _setPythonDefault() async {
+    final state = ref.read(depListProvider);
+    try {
+      await ref
+          .read(depListProvider.notifier)
+          .setDefaultPythonRuntime(state.selectedPythonVersion);
+      await _loadCounts();
+      _showMessage('已设置默认 Python 版本');
+    } catch (error) {
+      _showMessage(_extractError(error, '设置默认 Python 版本失败'));
+    }
+  }
+
   Future<void> _handleCreate() async {
     final request = await _showCreateDialog();
     if (request == null) {
@@ -333,7 +494,11 @@ class _DepListPageState extends ConsumerState<DepListPage> {
           .read(depListProvider.notifier)
           .create(type: request.type, names: request.names);
       await _loadCounts();
-      _showMessage('已提交 ${request.names.length} 个依赖安装');
+      _showMessage(
+        request.type == 'python'
+            ? '已提交 Python 依赖安装，会同步到可用的 Python 版本'
+            : '已提交 ${request.names.length} 个依赖安装',
+      );
     } catch (error) {
       _showMessage(_extractError(error, '提交安装失败'));
     }
@@ -369,6 +534,12 @@ class _DepListPageState extends ConsumerState<DepListPage> {
                       setDialogState(() => createType = selection.first);
                     },
                   ),
+                  if (createType == 'python') ...[
+                    const SizedBox(height: 12),
+                    _PythonInstallHint(
+                      isLight: Theme.of(context).brightness == Brightness.light,
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   TextField(
                     controller: namesController,
@@ -799,6 +970,116 @@ class _DepListPageState extends ConsumerState<DepListPage> {
     );
   }
 
+  Widget _buildPythonRuntimePanel(DepListState state, bool isLight) {
+    final runtimes = state.pythonRuntimes;
+    final hasSelected = runtimes.any(
+      (runtime) => runtime.version == state.selectedPythonVersion,
+    );
+    final selectedVersion = hasSelected
+        ? state.selectedPythonVersion
+        : (runtimes.isNotEmpty ? runtimes.first.version : null);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isLight ? Colors.white : AppColors.slate900,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isLight ? AppColors.slate200 : AppColors.slate800,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    key: ValueKey(selectedVersion),
+                    initialValue: selectedVersion,
+                    decoration: const InputDecoration(
+                      labelText: 'Python 版本',
+                      isDense: true,
+                    ),
+                    items: runtimes.map((runtime) {
+                      final suffix = runtime.isDefault ? '（默认）' : '';
+                      return DropdownMenuItem(
+                        value: runtime.version,
+                        child: Text('${runtime.label}$suffix'),
+                      );
+                    }).toList(),
+                    onChanged: state.runtimeLoading
+                        ? null
+                        : (value) {
+                            if (value != null) _changePythonVersion(value);
+                          },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton(
+                  onPressed:
+                      state.selectedPythonVersion == state.pythonDefaultVersion
+                      ? null
+                      : _setPythonDefault,
+                  child: const Text('设为默认'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _PythonInstallHint(isLight: isLight),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: runtimes.isEmpty
+                  ? [
+                      Text(
+                        state.runtimeLoading ? '正在加载 Python 运行时...' : '暂无运行时信息',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isLight
+                              ? AppColors.slate500
+                              : AppColors.slate400,
+                        ),
+                      ),
+                    ]
+                  : runtimes.map((runtime) {
+                      final color = runtime.available
+                          ? AppColors.primary
+                          : AppColors.amber500;
+                      return Tooltip(
+                        message: runtime.message,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: color.withAlpha(18),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: color.withAlpha(60)),
+                          ),
+                          child: Text(
+                            '${runtime.label}：${runtime.available ? '可用' : '需安装'}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: color,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(depListProvider);
@@ -902,6 +1183,10 @@ class _DepListPageState extends ConsumerState<DepListPage> {
               ),
             ),
             const SizedBox(height: 10),
+            if (state.selectedType == 'python') ...[
+              _buildPythonRuntimePanel(state, isLight),
+              const SizedBox(height: 10),
+            ],
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
@@ -920,7 +1205,11 @@ class _DepListPageState extends ConsumerState<DepListPage> {
                     selected: _statusFilter == 'installed',
                     isLight: isLight,
                     color: AppColors.primary,
-                    onTap: () => setState(() => _statusFilter = _statusFilter == 'installed' ? null : 'installed'),
+                    onTap: () => setState(
+                      () => _statusFilter = _statusFilter == 'installed'
+                          ? null
+                          : 'installed',
+                    ),
                   ),
                   const SizedBox(width: 8),
                   _StatusFilterChip(
@@ -929,7 +1218,11 @@ class _DepListPageState extends ConsumerState<DepListPage> {
                     selected: _statusFilter == 'failed',
                     isLight: isLight,
                     color: AppColors.red500,
-                    onTap: () => setState(() => _statusFilter = _statusFilter == 'failed' ? null : 'failed'),
+                    onTap: () => setState(
+                      () => _statusFilter = _statusFilter == 'failed'
+                          ? null
+                          : 'failed',
+                    ),
                   ),
                 ],
               ),
@@ -969,7 +1262,9 @@ class _DepListPageState extends ConsumerState<DepListPage> {
                     : () {
                         final filtered = _statusFilter == null
                             ? state.items
-                            : state.items.where((d) => d.status == _statusFilter).toList();
+                            : state.items
+                                  .where((d) => d.status == _statusFilter)
+                                  .toList();
                         if (filtered.isEmpty) {
                           return ListView(
                             physics: const AlwaysScrollableScrollPhysics(),
@@ -986,7 +1281,9 @@ class _DepListPageState extends ConsumerState<DepListPage> {
                                   _statusFilter != null
                                       ? '没有${_statusFilter == 'installed' ? '已安装' : '失败'}的依赖'
                                       : '暂无${_typeLabel(state.selectedType)}依赖',
-                                  style: const TextStyle(color: AppColors.slate400),
+                                  style: const TextStyle(
+                                    color: AppColors.slate400,
+                                  ),
                                 ),
                               ),
                             ],
@@ -997,39 +1294,41 @@ class _DepListPageState extends ConsumerState<DepListPage> {
                           itemCount: filtered.length,
                           itemBuilder: (_, i) {
                             final dep = filtered[i];
-                          return _DepCard(
-                            dep: dep,
-                            isLight: isLight,
-                            selected: _selectedIds.contains(dep.id),
-                            subtitle:
-                                '${_typeLabel(dep.type)} · ${_dateFormat.format(dep.createdAt.toLocal())}',
-                            onSelected: (value) {
-                              setState(() {
-                                if (value) {
-                                  _selectedIds.add(dep.id);
-                                } else {
-                                  _selectedIds.remove(dep.id);
-                                }
-                              });
-                            },
-                            onViewLog: () =>
-                                context.push('/deps/${dep.id}/log-stream'),
-                            onCancel: dep.isBusy
-                                ? () => _handleCancel(dep)
-                                : null,
-                            onReinstall: dep.isBusy
-                                ? null
-                                : () => _handleReinstall(dep),
-                            onDelete: dep.isBusy
-                                ? null
-                                : () => _confirmDelete(dep),
-                            onForceDelete: dep.isBusy
-                                ? null
-                                : () => _confirmDelete(dep, force: true),
-                          );
-                        },
-                      );
-                    }(),
+                            return _DepCard(
+                              dep: dep,
+                              isLight: isLight,
+                              selected: _selectedIds.contains(dep.id),
+                              subtitle:
+                                  '${_typeLabel(dep.type)}'
+                                  '${dep.type == 'python' && dep.pythonVersion.isNotEmpty ? ' ${dep.pythonVersion}' : ''}'
+                                  ' · ${_dateFormat.format(dep.createdAt.toLocal())}',
+                              onSelected: (value) {
+                                setState(() {
+                                  if (value) {
+                                    _selectedIds.add(dep.id);
+                                  } else {
+                                    _selectedIds.remove(dep.id);
+                                  }
+                                });
+                              },
+                              onViewLog: () =>
+                                  context.push('/deps/${dep.id}/log-stream'),
+                              onCancel: dep.isBusy
+                                  ? () => _handleCancel(dep)
+                                  : null,
+                              onReinstall: dep.isBusy
+                                  ? null
+                                  : () => _handleReinstall(dep),
+                              onDelete: dep.isBusy
+                                  ? null
+                                  : () => _confirmDelete(dep),
+                              onForceDelete: dep.isBusy
+                                  ? null
+                                  : () => _confirmDelete(dep, force: true),
+                            );
+                          },
+                        );
+                      }(),
               ),
             ),
           ],
@@ -1390,7 +1689,9 @@ class _StatusFilterChip extends StatelessWidget {
           color: bg,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? activeColor.withAlpha(60) : (isLight ? AppColors.slate200 : AppColors.slate800),
+            color: selected
+                ? activeColor.withAlpha(60)
+                : (isLight ? AppColors.slate200 : AppColors.slate800),
           ),
         ),
         child: Row(
@@ -1408,7 +1709,9 @@ class _StatusFilterChip extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(
-                color: selected ? activeColor : (isLight ? AppColors.slate200 : AppColors.slate800),
+                color: selected
+                    ? activeColor
+                    : (isLight ? AppColors.slate200 : AppColors.slate800),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(
@@ -1421,6 +1724,33 @@ class _StatusFilterChip extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PythonInstallHint extends StatelessWidget {
+  final bool isLight;
+
+  const _PythonInstallHint({required this.isLight});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.blue500.withAlpha(12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.blue500.withAlpha(30)),
+      ),
+      child: Text(
+        'Python 多版本说明：二进制部署不会内置三个 Python，只需在服务器安装实际要用的版本；安装 Python 依赖时会同步提交到可用的 Python 3.10、3.11、3.12 环境。',
+        style: TextStyle(
+          fontSize: 12,
+          height: 1.5,
+          color: isLight ? AppColors.slate600 : AppColors.slate300,
         ),
       ),
     );

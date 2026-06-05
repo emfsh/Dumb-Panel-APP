@@ -6,6 +6,7 @@ import '../../../core/storage/secure_storage.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../dashboard/providers/dashboard_provider.dart';
+import '../widgets/geetest_captcha_dialog.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key, this.skipAutoLogin = false});
@@ -31,6 +32,38 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   String? _currentUrl;
   List<PanelConfig> _panels = [];
   PanelConfig? _selectedPanel;
+
+  Future<Map<String, dynamic>?> _prepareCaptchaIfEnabled(
+    String username,
+  ) async {
+    final config = await ref
+        .read(authProvider.notifier)
+        .captchaConfig(username: username);
+    final enabled = config['enabled'] == true;
+    if (!enabled) {
+      return null;
+    }
+
+    final captchaId = config['captcha_id']?.toString().trim() ?? '';
+    if (captchaId.isEmpty || config['configured'] == false) {
+      throw _LoginFlowMessage(
+        config['message']?.toString() ?? '验证码未配置完整，请先在 Web 端检查极验配置',
+      );
+    }
+
+    if (!mounted) {
+      throw const _LoginFlowMessage('登录页面已关闭');
+    }
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => GeeTestCaptchaDialog(captchaId: captchaId),
+    );
+    if (result == null) {
+      throw _LoginFlowMessage('请先完成滑块验证');
+    }
+    return result;
+  }
 
   @override
   void initState() {
@@ -96,9 +129,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     });
 
     final auth = ref.read(authProvider.notifier);
+    final initializing = _needsInit;
 
     try {
-      if (_needsInit) {
+      if (initializing) {
         try {
           await auth.initAdmin(
             _usernameController.text.trim(),
@@ -108,10 +142,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         setState(() => _needsInit = false);
       }
 
+      final captcha = initializing
+          ? null
+          : await _prepareCaptchaIfEnabled(_usernameController.text.trim());
+      if (!mounted) {
+        return;
+      }
+
       final result = await auth.login(
         username: _usernameController.text.trim(),
         password: _passwordController.text,
         totpCode: _needsTotp ? _totpController.text.trim() : null,
+        captcha: captcha,
       );
 
       if (result['two_factor_required'] == true) {
@@ -125,7 +167,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
       if (result['captcha_required'] == true) {
         setState(() {
-          _error = '需要验证码，请使用 Web 端登录';
+          _error = result['error']?.toString() ?? '验证码已失效，请重新完成滑块验证';
           _loading = false;
         });
         return;
@@ -155,7 +197,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       } catch (_) {}
     } catch (e) {
       setState(() {
-        _error = ref.read(authProvider).error ?? '登录失败';
+        _error = e is _LoginFlowMessage
+            ? e.message
+            : ref.read(authProvider).error ?? '登录失败';
       });
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -387,12 +431,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           textAlignVertical: TextAlignVertical.center,
                           keyboardType: TextInputType.number,
                           maxLength: 6,
-                          buildCounter: (
-                            BuildContext context, {
-                            required int currentLength,
-                            required bool isFocused,
-                            required int? maxLength,
-                          }) => null,
+                          buildCounter:
+                              (
+                                BuildContext context, {
+                                required int currentLength,
+                                required bool isFocused,
+                                required int? maxLength,
+                              }) => null,
                           textInputAction: TextInputAction.go,
                           onChanged: (_) => setState(() {}),
                           onFieldSubmitted: (_) => _submit(),
@@ -526,6 +571,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   }
 }
 
+class _LoginFlowMessage implements Exception {
+  final String message;
+
+  const _LoginFlowMessage(this.message);
+}
+
 class _FieldLabel extends StatelessWidget {
   final String text;
   const _FieldLabel(this.text);
@@ -604,14 +655,18 @@ class _CompactCheck extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
-            width: 18,
-            height: 18,
+            width: 22,
+            height: 22,
             child: Checkbox(
               value: value,
               onChanged: enabled ? (v) => onChanged(v ?? false) : null,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               visualDensity: VisualDensity.compact,
               activeColor: AppColors.primary,
+              checkColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+              ),
               side: BorderSide(color: AppColors.slate300, width: 1.5),
             ),
           ),

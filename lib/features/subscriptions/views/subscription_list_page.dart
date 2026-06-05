@@ -601,20 +601,33 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                                 children: [
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        const Text('覆盖本地修改', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                        const Text(
+                                          '覆盖本地修改',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          forceOverwrite ? '拉取时覆盖本地修改' : '拉取时保留本地修改的文件',
-                                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                          forceOverwrite
+                                              ? '拉取时覆盖本地修改'
+                                              : '拉取时保留本地修改的文件',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey,
+                                          ),
                                         ),
                                       ],
                                     ),
                                   ),
                                   Switch(
                                     value: forceOverwrite,
-                                    onChanged: (v) => setSheetState(() => forceOverwrite = v),
+                                    onChanged: (v) =>
+                                        setSheetState(() => forceOverwrite = v),
                                   ),
                                 ],
                               ),
@@ -628,6 +641,8 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                                   alignLabelWithHint: true,
                                 ),
                               ),
+                              const SizedBox(height: 8),
+                              const _HookScriptHint(),
                             ],
                             const SizedBox(height: 16),
                           ],
@@ -855,20 +870,33 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                                 children: [
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        const Text('覆盖本地修改', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                        const Text(
+                                          '覆盖本地修改',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
                                         const SizedBox(height: 2),
                                         Text(
-                                          forceOverwrite ? '拉取时覆盖本地修改' : '拉取时保留本地修改的文件',
-                                          style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                          forceOverwrite
+                                              ? '拉取时覆盖本地修改'
+                                              : '拉取时保留本地修改的文件',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey,
+                                          ),
                                         ),
                                       ],
                                     ),
                                   ),
                                   Switch(
                                     value: forceOverwrite,
-                                    onChanged: (v) => setSheetState(() => forceOverwrite = v),
+                                    onChanged: (v) =>
+                                        setSheetState(() => forceOverwrite = v),
                                   ),
                                 ],
                               ),
@@ -882,6 +910,8 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                                   alignLabelWithHint: true,
                                 ),
                               ),
+                              const SizedBox(height: 8),
+                              const _HookScriptHint(),
                             ],
                             const SizedBox(height: 16),
                           ],
@@ -1151,6 +1181,32 @@ class _SmallIconBtn extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(6),
         child: Icon(icon, size: 18, color: color ?? AppColors.slate400),
+      ),
+    );
+  }
+}
+
+class _HookScriptHint extends StatelessWidget {
+  const _HookScriptHint();
+
+  @override
+  Widget build(BuildContext context) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: AppColors.blue500.withAlpha(12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.blue500.withAlpha(30)),
+      ),
+      child: Text(
+        '钩子会在订阅拉取成功后执行，适合安装依赖、移动文件或触发通知；这里填写的是 Shell 命令，留空则不执行。',
+        style: TextStyle(
+          fontSize: 12,
+          height: 1.5,
+          color: isLight ? AppColors.slate600 : AppColors.slate300,
+        ),
       ),
     );
   }
