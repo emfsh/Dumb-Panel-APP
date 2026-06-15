@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/models/python_runtime_info.dart';
 import '../../../shared/models/task.dart';
 import '../../../shared/utils/api_utils.dart';
 import '../providers/task_provider.dart';
@@ -75,15 +76,18 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
 
   bool _saving = false;
   bool _loadingChannels = false;
+  bool _loadingPythonRuntimes = false;
   String _taskType = 'cron';
   bool _notifyOnFailure = true;
   bool _notifyOnSuccess = false;
   bool _allowMultipleInstances = false;
   String _pythonVersion = '3.12';
+  String _pythonDefaultVersion = '3.12';
   int? _notificationChannelId;
   _RandomDelayMode _randomDelayMode = _RandomDelayMode.inherit;
   final List<String> _labels = [];
   List<_TaskNotificationChannel> _notificationChannels = const [];
+  List<PythonRuntimeInfo> _pythonRuntimes = const [];
   bool _showHooks = false;
   List<String> _knownGroups = const [];
 
@@ -132,7 +136,11 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
     _showHooks = _taskBeforeC.text.isNotEmpty || _taskAfterC.text.isNotEmpty;
 
     Future.microtask(() async {
-      await Future.wait([_loadNotificationChannels(), _loadKnownGroups()]);
+      await Future.wait([
+        _loadNotificationChannels(),
+        _loadKnownGroups(),
+        _loadPythonRuntimes(),
+      ]);
     });
   }
 
@@ -211,6 +219,61 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
     } catch (_) {}
   }
 
+  Future<void> _loadPythonRuntimes() async {
+    // 新建任务时，默认 Python 版本必须跟随后端默认版本，而不是继续写死 3.12。
+    setState(() => _loadingPythonRuntimes = true);
+    try {
+      final response = await DioClient.instance.dio.get(
+        ApiEndpoints.depsPythonRuntimes,
+      );
+      final raw = response.data;
+      final map = raw is Map<String, dynamic>
+          ? raw
+          : raw is Map
+          ? Map<String, dynamic>.from(raw)
+          : <String, dynamic>{};
+      final runtimeData = map['data'];
+      final runtimes = runtimeData is List
+          ? runtimeData
+                .whereType<Map>()
+                .map(
+                  (item) => PythonRuntimeInfo.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
+                .where((item) => item.version.trim().isNotEmpty)
+                .toList()
+          : <PythonRuntimeInfo>[];
+      final defaultVersion =
+          map['default_version']?.toString().trim().isNotEmpty == true
+          ? map['default_version'].toString().trim()
+          : '3.12';
+      final currentExists = runtimes.any(
+        (runtime) => runtime.version == _pythonVersion,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _pythonRuntimes = runtimes;
+        _pythonDefaultVersion = defaultVersion;
+        // 编辑已有任务时保留原值；新建任务时直接跟随后端默认版本。
+        if (isEditing) {
+          if (!currentExists && runtimes.isNotEmpty) {
+            _pythonVersion = widget.task?.pythonVersion ?? defaultVersion;
+          }
+        } else {
+          _pythonVersion = defaultVersion;
+        }
+        _loadingPythonRuntimes = false;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _loadingPythonRuntimes = false);
+      }
+    }
+  }
+
   void _addLabel() {
     final label = _labelC.text.trim();
     if (label.isEmpty || _labels.contains(label)) {
@@ -227,8 +290,12 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
       int.tryParse(c.text.trim()) ?? fb;
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_labelC.text.trim().isNotEmpty) _addLabel();
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    if (_labelC.text.trim().isNotEmpty) {
+      _addLabel();
+    }
 
     final randomDelay = switch (_randomDelayMode) {
       _RandomDelayMode.inherit => null,
@@ -309,6 +376,24 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
       );
     }
     return list;
+  }
+
+  List<DropdownMenuItem<String>> get _pythonRuntimeItems {
+    if (_pythonRuntimes.isEmpty) {
+      return const [
+        DropdownMenuItem(value: '3.10', child: Text('Python 3.10')),
+        DropdownMenuItem(value: '3.11', child: Text('Python 3.11')),
+        DropdownMenuItem(value: '3.12', child: Text('Python 3.12')),
+      ];
+    }
+    return _pythonRuntimes.map((runtime) {
+      final suffix = runtime.version == _pythonDefaultVersion ? '（默认）' : '';
+      final status = runtime.available ? '' : ' · 需安装';
+      return DropdownMenuItem(
+        value: runtime.version,
+        child: Text('${runtime.label}$suffix$status'),
+      );
+    }).toList();
   }
 
   @override
@@ -409,17 +494,26 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: _pythonVersion,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Python 版本',
-                    helperText: '仅 Python 脚本使用；需要服务器已安装对应版本。',
+                    helperText:
+                        '仅 Python 脚本使用；新建任务默认跟随面板默认 Python 版本。',
+                    suffixIcon: _loadingPythonRuntimes
+                        ? const Padding(
+                            padding: EdgeInsets.all(14),
+                            child: SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : null,
                   ),
-                  items: const [
-                    DropdownMenuItem(value: '3.10', child: Text('Python 3.10')),
-                    DropdownMenuItem(value: '3.11', child: Text('Python 3.11')),
-                    DropdownMenuItem(value: '3.12', child: Text('Python 3.12')),
-                  ],
+                  items: _pythonRuntimeItems,
                   onChanged: (v) {
-                    if (v != null) setState(() => _pythonVersion = v);
+                    if (v != null) {
+                      setState(() => _pythonVersion = v);
+                    }
                   },
                 ),
                 if (_taskType == 'cron') ...[

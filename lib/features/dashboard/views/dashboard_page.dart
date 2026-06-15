@@ -71,7 +71,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             width: size,
             height: size,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _buildFallbackAvatar(auth, isLight, size),
+            errorBuilder: (context, error, stackTrace) =>
+                _buildFallbackAvatar(auth, isLight, size),
           ),
         ),
       );
@@ -274,10 +275,14 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           iconBgDark: AppColors.primary.withAlpha(25),
                           iconColor: AppColors.primary,
                           iconColorDark: AppColors.primary,
-                          label: '内存 (${data.memoryUsed}/${data.memoryTotal})',
-                          value: data.memoryUsage,
+                          label: data.memoryUnavailable
+                              ? '内存（资源采集不可用）'
+                              : '内存 (${data.memoryUsed}/${data.memoryTotal})',
+                          value: data.memoryUnavailable ? null : data.memoryUsage,
                           barColor: AppColors.primary,
-                          valueText: '${data.memoryUsage.toStringAsFixed(0)}%',
+                          valueText: data.memoryUnavailable
+                              ? '不可用'
+                              : '${data.memoryUsage.toStringAsFixed(0)}%',
                           isLight: isLight,
                         ),
                       ),
@@ -505,7 +510,7 @@ class _StatCard extends StatelessWidget {
   final Color iconColor;
   final Color iconColorDark;
   final String label;
-  final double value;
+  final double? value;
   final Color barColor;
   final String valueText;
   final String? subtitle;
@@ -592,7 +597,7 @@ class _StatCard extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
-              value: (value / 100).clamp(0.0, 1.0),
+              value: value == null ? null : (value! / 100).clamp(0.0, 1.0),
               minHeight: 6,
               backgroundColor: isLight
                   ? AppColors.slate100

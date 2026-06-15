@@ -17,9 +17,11 @@ class SystemSettingsPage extends ConsumerStatefulWidget {
 class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
   Map<String, dynamic>? _versionInfo;
   Map<String, dynamic>? _updateInfo;
+  Map<String, dynamic>? _updateStatus;
   bool _loading = true;
   bool _checking = false;
   bool _savingConfigs = false;
+  bool _updatingPanel = false;
 
   final _concurrencyC = TextEditingController();
   final _logRetentionC = TextEditingController();
@@ -183,6 +185,99 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
     }
   }
 
+  bool get _isWatchtowerManaged {
+    final target = _updateInfo?['update_target'];
+    if (target is! Map) {
+      return false;
+    }
+    return target['update_manager']?.toString() == 'watchtower' ||
+        target['watchtower_managed'] == true;
+  }
+
+  bool get _isBinaryUpdate {
+    final target = _updateInfo?['update_target'];
+    if (target is! Map) {
+      return false;
+    }
+    return target['deployment_type']?.toString() == 'binary';
+  }
+
+  String _updateActionLabel() {
+    if (_isWatchtowerManaged) {
+      return '触发 Watchtower 检查';
+    }
+    return '立即更新';
+  }
+
+  String _updateSuccessHint() {
+    if (_isWatchtowerManaged) {
+      return '已触发 Watchtower 检查更新，请稍后查看 Watchtower 日志或等待容器重建结果';
+    }
+    if (_isBinaryUpdate) {
+      return '后台更新任务已启动，面板完成替换后会自动重启';
+    }
+    return '更新任务已启动，面板将拉取镜像并重建容器';
+  }
+
+  String _buildUpdateSummary() {
+    final target = _updateInfo?['update_target'];
+    if (target is! Map) {
+      return '';
+    }
+    final lines = <String>[];
+    if (target['deployment_type']?.toString() == 'binary') {
+      lines.add('更新方式：二进制后台更新');
+    } else if (_isWatchtowerManaged) {
+      lines.add('更新方式：Watchtower 托管更新');
+    } else {
+      lines.add('更新方式：Docker 镜像更新');
+    }
+    final assetName = target['asset_name']?.toString() ?? '';
+    if (assetName.trim().isNotEmpty) {
+      lines.add('更新包：$assetName');
+    }
+    final installDir = target['install_dir']?.toString() ?? '';
+    if (installDir.trim().isNotEmpty) {
+      lines.add('安装目录：$installDir');
+    }
+    final mirrorHost = target['mirror_host']?.toString() ?? '';
+    if (mirrorHost.trim().isNotEmpty) {
+      lines.add('镜像源：$mirrorHost');
+    }
+    final channel = target['channel']?.toString() ?? '';
+    if (channel.trim().isNotEmpty) {
+      lines.add('渠道：${channel == 'debian' ? 'Debian' : 'Latest (Alpine)'}');
+    }
+    final schedule = target['watchtower_schedule']?.toString() ?? '';
+    if (schedule.trim().isNotEmpty) {
+      lines.add('Watchtower 调度：$schedule');
+    }
+    final reason = _updateInfo?['update_disabled_reason']?.toString() ?? '';
+    if (reason.trim().isNotEmpty) {
+      lines.add(reason.trim());
+    }
+    return lines.join('\n');
+  }
+
+  Future<void> _loadUpdateStatus() async {
+    try {
+      final response = await DioClient.instance.dio.get(
+        '${ApiEndpoints.baseApi}/system/update-status',
+      );
+      final data = extractData(response.data);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _updateStatus = data is Map<String, dynamic>
+            ? data
+            : data is Map
+            ? Map<String, dynamic>.from(data)
+            : null;
+      });
+    } catch (_) {}
+  }
+
   void _showUpdateDialog() {
     showDialog(
       context: context,
@@ -227,7 +322,7 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
                         Navigator.pop(dialogCtx);
                         _doUpdate();
                       },
-                      child: const Text('立即更新'),
+                      child: Text(_updateActionLabel()),
                     ),
                   ),
                 ),
@@ -248,20 +343,36 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
   }
 
   Future<void> _doUpdate() async {
+    setState(() => _updatingPanel = true);
     try {
-      await DioClient.instance.dio.post(
+      final response = await DioClient.instance.dio.post(
         '${ApiEndpoints.baseApi}/system/update',
       );
+      final data = extractData(response.data);
+      if (mounted) {
+        setState(() {
+          _updateStatus = data is Map<String, dynamic>
+              ? data
+              : data is Map
+              ? Map<String, dynamic>.from(data)
+              : _updateStatus;
+        });
+      }
+      await _loadUpdateStatus();
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('更新已启动，面板将自动重启')));
+        ).showSnackBar(SnackBar(content: Text(_updateSuccessHint())));
       }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(extractErrorMessage(error, '更新失败'))),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _updatingPanel = false);
       }
     }
   }
@@ -510,9 +621,123 @@ class _SystemSettingsPageState extends ConsumerState<SystemSettingsPage> {
                                 ),
                               ),
                             ),
+                            if (_updateInfo != null) ...[
+                              const SizedBox(height: 10),
+                              _Card(
+                                isLight: isLight,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _updateInfo?['has_update'] == true
+                                          ? '发现新版本：${_updateInfo?['latest'] ?? '-'}'
+                                          : '当前已是最新版本',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    if (_buildUpdateSummary().trim().isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        _buildUpdateSummary(),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          height: 1.6,
+                                          color: isLight
+                                              ? AppColors.slate600
+                                              : AppColors.slate300,
+                                        ),
+                                      ),
+                                    ],
+                                    if (_updateInfo?['has_update'] == true &&
+                                        _updateInfo?['auto_update_supported'] ==
+                                            true) ...[
+                                      const SizedBox(height: 12),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        height: 42,
+                                        child: FilledButton(
+                                          onPressed: _updatingPanel
+                                              ? null
+                                              : _doUpdate,
+                                          child: Text(
+                                            _updatingPanel
+                                                ? '处理中...'
+                                                : _updateActionLabel(),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
 
                           const SizedBox(height: 20),
+
+                          if (_updateStatus != null &&
+                              (_updateStatus?['status']?.toString().trim().isNotEmpty ??
+                                  false) &&
+                              _updateStatus?['status'] != 'idle') ...[
+                            _SectionTitle('更新状态'),
+                            const SizedBox(height: 8),
+                            _Card(
+                              isLight: isLight,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '状态：${_updateStatus?['status'] ?? '-'}',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    _updateStatus?['message']?.toString() ?? '暂无状态说明',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      height: 1.6,
+                                      color: isLight
+                                          ? AppColors.slate600
+                                          : AppColors.slate300,
+                                    ),
+                                  ),
+                                  if ((_updateStatus?['phase']?.toString() ?? '')
+                                      .trim()
+                                      .isNotEmpty) ...[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '阶段：${_updateStatus?['phase']}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: isLight
+                                            ? AppColors.slate500
+                                            : AppColors.slate400,
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 40,
+                                    child: OutlinedButton.icon(
+                                      onPressed: _loadUpdateStatus,
+                                      icon: const Icon(
+                                        Icons.refresh_rounded,
+                                        size: 18,
+                                      ),
+                                      label: const Text('刷新更新状态'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                          ],
 
                           // ── 任务运行 ──
                           _SectionTitle('任务运行'),

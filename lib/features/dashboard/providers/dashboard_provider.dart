@@ -4,13 +4,21 @@ import '../../../core/network/api_endpoints.dart';
 import '../../../shared/utils/api_utils.dart';
 
 String _formatBytes(dynamic bytes) {
-  if (bytes == null) return '-';
+  if (bytes == null) {
+    return '-';
+  }
   final b = (bytes as num).toDouble();
   if (b < 1024) return '${b.toStringAsFixed(0)}B';
   if (b < 1024 * 1024) return '${(b / 1024).toStringAsFixed(1)}KB';
   if (b < 1024 * 1024 * 1024)
     return '${(b / 1024 / 1024).toStringAsFixed(1)}MB';
   return '${(b / 1024 / 1024 / 1024).toStringAsFixed(1)}GB';
+}
+
+bool _resourceUnavailable(dynamic total) {
+  if (total == null) return true;
+  if (total is num) return total <= 0;
+  return false;
 }
 
 class DashboardData {
@@ -30,6 +38,7 @@ class DashboardData {
   double get cpuUsage => (system['cpu_usage'] as num?)?.toDouble() ?? 0;
   double get memoryUsage => (system['memory_usage'] as num?)?.toDouble() ?? 0;
   double get diskUsage => (system['disk_usage'] as num?)?.toDouble() ?? 0;
+  bool get memoryUnavailable => _resourceUnavailable(system['memory_total']);
   String get memoryTotal => _formatBytes(system['memory_total']);
   String get memoryUsed => _formatBytes(system['memory_used']);
   String get diskTotal => _formatBytes(system['disk_total']);
