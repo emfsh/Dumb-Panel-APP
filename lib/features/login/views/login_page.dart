@@ -252,12 +252,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                     // Logo
                     Container(
                       width: 56,
@@ -452,8 +454,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
                     // Remember + AutoLogin
                     const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 16,
+                      runSpacing: 8,
                       children: [
                         _CompactCheck(
                           value: _rememberPassword,
@@ -556,7 +560,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         ),
                       ),
                     ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -655,13 +660,11 @@ class _CompactCheck extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
-            width: 22,
-            height: 22,
+            width: 28,
+            height: 28,
             child: Checkbox(
               value: value,
               onChanged: enabled ? (v) => onChanged(v ?? false) : null,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              visualDensity: VisualDensity.compact,
               activeColor: AppColors.primary,
               checkColor: Colors.white,
               shape: RoundedRectangleBorder(
@@ -670,7 +673,7 @@ class _CompactCheck extends StatelessWidget {
               side: BorderSide(color: AppColors.slate300, width: 1.5),
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
           Text(label, style: TextStyle(fontSize: 13, color: color)),
         ],
       ),

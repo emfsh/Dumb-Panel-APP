@@ -954,13 +954,14 @@ class _DepListPageState extends ConsumerState<DepListPage> {
             color: isLight ? AppColors.slate200 : AppColors.slate800,
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 420;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: DropdownButtonFormField<String>(
+                if (isNarrow) ...[
+                  DropdownButtonFormField<String>(
                     key: ValueKey(selectedVersion),
                     initialValue: selectedVersion,
                     decoration: const InputDecoration(
@@ -980,64 +981,105 @@ class _DepListPageState extends ConsumerState<DepListPage> {
                             if (value != null) _changePythonVersion(value);
                           },
                   ),
-                ),
-                const SizedBox(width: 10),
-                OutlinedButton(
-                  onPressed:
-                      state.selectedPythonVersion == state.pythonDefaultVersion
-                      ? null
-                      : _setPythonDefault,
-                  child: const Text('设为默认'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            _PythonInstallHint(isLight: isLight),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: runtimes.isEmpty
-                  ? [
-                      Text(
-                        state.runtimeLoading ? '正在加载 Python 运行时...' : '暂无运行时信息',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isLight
-                              ? AppColors.slate500
-                              : AppColors.slate400,
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed:
+                          state.selectedPythonVersion ==
+                              state.pythonDefaultVersion
+                          ? null
+                          : _setPythonDefault,
+                      child: const Text('设为默认'),
+                    ),
+                  ),
+                ] else
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          key: ValueKey(selectedVersion),
+                          initialValue: selectedVersion,
+                          decoration: const InputDecoration(
+                            labelText: 'Python 版本',
+                            isDense: true,
+                          ),
+                          items: runtimes.map((runtime) {
+                            final suffix = runtime.isDefault ? '（默认）' : '';
+                            return DropdownMenuItem(
+                              value: runtime.version,
+                              child: Text('${runtime.label}$suffix'),
+                            );
+                          }).toList(),
+                          onChanged: state.runtimeLoading
+                              ? null
+                              : (value) {
+                                  if (value != null) _changePythonVersion(value);
+                                },
                         ),
                       ),
-                    ]
-                  : runtimes.map((runtime) {
-                      final color = runtime.available
-                          ? AppColors.primary
-                          : AppColors.amber500;
-                      return Tooltip(
-                        message: runtime.message,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: color.withAlpha(18),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: color.withAlpha(60)),
-                          ),
-                          child: Text(
-                            '${runtime.label}：${runtime.available ? '可用' : '需安装'}',
+                      const SizedBox(width: 10),
+                      OutlinedButton(
+                        onPressed:
+                            state.selectedPythonVersion ==
+                                state.pythonDefaultVersion
+                            ? null
+                            : _setPythonDefault,
+                        child: const Text('设为默认'),
+                      ),
+                    ],
+                  ),
+                const SizedBox(height: 10),
+                _PythonInstallHint(isLight: isLight),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: runtimes.isEmpty
+                      ? [
+                          Text(
+                            state.runtimeLoading
+                                ? '正在加载 Python 运行时...'
+                                : '暂无运行时信息',
                             style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: color,
+                              fontSize: 12,
+                              color: isLight
+                                  ? AppColors.slate500
+                                  : AppColors.slate400,
                             ),
                           ),
-                        ),
-                      );
-                    }).toList(),
-            ),
-          ],
+                        ]
+                      : runtimes.map((runtime) {
+                          final color = runtime.available
+                              ? AppColors.primary
+                              : AppColors.amber500;
+                          return Tooltip(
+                            message: runtime.message,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: color.withAlpha(18),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(color: color.withAlpha(60)),
+                              ),
+                              child: Text(
+                                '${runtime.label}：${runtime.available ? '可用' : '需安装'}',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: color,
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -1048,6 +1090,8 @@ class _DepListPageState extends ConsumerState<DepListPage> {
     final state = ref.watch(depListProvider);
     final theme = Theme.of(context);
     final isLight = theme.brightness == Brightness.light;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isNarrow = screenWidth < 420;
 
     return Scaffold(
       body: Padding(
@@ -1114,35 +1158,45 @@ class _DepListPageState extends ConsumerState<DepListPage> {
             const SizedBox(height: 14),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _buildCountCard(
-                      'nodejs',
-                      'NodeJS',
-                      state.selectedType == 'nodejs',
-                      isLight,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _buildCountCard(
-                      'python',
-                      'Python',
-                      state.selectedType == 'python',
-                      isLight,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _buildCountCard(
-                      'linux',
-                      'Linux',
-                      state.selectedType == 'linux',
-                      isLight,
-                    ),
-                  ),
-                ],
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = isNarrow
+                      ? (constraints.maxWidth - 10) / 2
+                      : (constraints.maxWidth - 20) / 3;
+                  return Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      SizedBox(
+                        width: width,
+                        child: _buildCountCard(
+                          'nodejs',
+                          'NodeJS',
+                          state.selectedType == 'nodejs',
+                          isLight,
+                        ),
+                      ),
+                      SizedBox(
+                        width: width,
+                        child: _buildCountCard(
+                          'python',
+                          'Python',
+                          state.selectedType == 'python',
+                          isLight,
+                        ),
+                      ),
+                      SizedBox(
+                        width: width,
+                        child: _buildCountCard(
+                          'linux',
+                          'Linux',
+                          state.selectedType == 'linux',
+                          isLight,
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
             const SizedBox(height: 10),
@@ -1152,7 +1206,9 @@ class _DepListPageState extends ConsumerState<DepListPage> {
             ],
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   _StatusFilterChip(
                     label: '全部',
@@ -1161,7 +1217,6 @@ class _DepListPageState extends ConsumerState<DepListPage> {
                     isLight: isLight,
                     onTap: () => setState(() => _statusFilter = null),
                   ),
-                  const SizedBox(width: 8),
                   _StatusFilterChip(
                     label: '已安装',
                     count: state.items.where((d) => d.isInstalled).length,
@@ -1174,7 +1229,6 @@ class _DepListPageState extends ConsumerState<DepListPage> {
                           : 'installed',
                     ),
                   ),
-                  const SizedBox(width: 8),
                   _StatusFilterChip(
                     label: '失败',
                     count: state.items.where((d) => d.isFailed).length,

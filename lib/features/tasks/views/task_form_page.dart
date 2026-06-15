@@ -400,6 +400,7 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isLight = theme.brightness == Brightness.light;
+    final isNarrow = MediaQuery.of(context).size.width < 420;
     final cardColor = isLight ? Colors.white : AppColors.slate900;
     final borderColor = isLight ? AppColors.slate200 : AppColors.slate800;
 
@@ -532,28 +533,27 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
                         : null,
                   ),
                   const SizedBox(height: 8),
-                  Row(
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
                       for (final p in [
                         ('每小时', '0 0 * * * *'),
                         ('每天0点', '0 0 0 * * *'),
                         ('每天9点', '0 0 9 * * *'),
                       ])
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ActionChip(
-                            label: Text(
-                              p.$1,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            onPressed: () {
-                              final cur = _cronC.text.trim();
-                              _cronC.text = cur.isEmpty
-                                  ? p.$2
-                                  : '$cur\n${p.$2}';
-                            },
-                            visualDensity: VisualDensity.compact,
+                        ActionChip(
+                          label: Text(
+                            p.$1,
+                            style: const TextStyle(fontSize: 12),
                           ),
+                          onPressed: () {
+                            final cur = _cronC.text.trim();
+                            _cronC.text = cur.isEmpty
+                                ? p.$2
+                                : '$cur\n${p.$2}';
+                          },
+                          visualDensity: VisualDensity.compact,
                         ),
                     ],
                   ),
@@ -576,81 +576,110 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
                           visualDensity: VisualDensity.compact,
                         ),
                       ),
-                      SizedBox(
-                        width: 140,
-                        height: 36,
-                        child: TextField(
-                          controller: _labelC,
-                          decoration: InputDecoration(
-                            hintText: '添加标签',
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 8,
-                            ),
-                            suffixIcon: IconButton(
-                              onPressed: _addLabel,
-                              icon: const Icon(Icons.add, size: 16),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                minWidth: 30,
-                                minHeight: 30,
-                              ),
-                            ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextField(
+                      controller: _labelC,
+                      decoration: InputDecoration(
+                        hintText: '添加标签',
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 10,
+                        ),
+                        suffixIcon: IconButton(
+                          onPressed: _addLabel,
+                          icon: const Icon(Icons.add, size: 16),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 36,
+                            minHeight: 36,
                           ),
-                          style: const TextStyle(fontSize: 13),
-                          onSubmitted: (_) => _addLabel(),
                         ),
                       ),
-                    ],
+                      style: const TextStyle(fontSize: 13),
+                      onSubmitted: (_) => _addLabel(),
+                    ),
                   ),
                 ],
               ]),
 
               // 执行策略
               section('执行策略', [
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _timeoutC,
-                        decoration: const InputDecoration(
-                          labelText: '超时(秒)',
-                          helperText: '0 表示永不超时',
+                if (isNarrow) ...[
+                  TextFormField(
+                    controller: _timeoutC,
+                    decoration: const InputDecoration(
+                      labelText: '超时(秒)',
+                      helperText: '0 表示永不超时',
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _retriesC,
+                    decoration: const InputDecoration(labelText: '重试次数'),
+                    keyboardType: TextInputType.number,
+                  ),
+                ] else
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _timeoutC,
+                          decoration: const InputDecoration(
+                            labelText: '超时(秒)',
+                            helperText: '0 表示永不超时',
+                          ),
+                          keyboardType: TextInputType.number,
                         ),
-                        keyboardType: TextInputType.number,
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _retriesC,
-                        decoration: const InputDecoration(labelText: '重试次数'),
-                        keyboardType: TextInputType.number,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _retriesC,
+                          decoration: const InputDecoration(labelText: '重试次数'),
+                          keyboardType: TextInputType.number,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _retryIntervalC,
-                        decoration: const InputDecoration(labelText: '重试间隔(秒)'),
-                        keyboardType: TextInputType.number,
+                if (isNarrow) ...[
+                  TextFormField(
+                    controller: _retryIntervalC,
+                    decoration: const InputDecoration(labelText: '重试间隔(秒)'),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _dependsOnC,
+                    decoration: const InputDecoration(labelText: '依赖任务ID'),
+                    keyboardType: TextInputType.number,
+                  ),
+                ] else
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _retryIntervalC,
+                          decoration: const InputDecoration(labelText: '重试间隔(秒)'),
+                          keyboardType: TextInputType.number,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _dependsOnC,
-                        decoration: const InputDecoration(labelText: '依赖任务ID'),
-                        keyboardType: TextInputType.number,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _dependsOnC,
+                          decoration: const InputDecoration(labelText: '依赖任务ID'),
+                          keyboardType: TextInputType.number,
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
                 const SizedBox(height: 14),
                 Text(
                   '随机延迟',
@@ -659,25 +688,32 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                SegmentedButton<_RandomDelayMode>(
-                  segments: const [
-                    ButtonSegment(
-                      value: _RandomDelayMode.inherit,
-                      label: Text('继承系统'),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('继承系统'),
+                      selected: _randomDelayMode == _RandomDelayMode.inherit,
+                      onSelected: (_) => setState(
+                        () => _randomDelayMode = _RandomDelayMode.inherit,
+                      ),
                     ),
-                    ButtonSegment(
-                      value: _RandomDelayMode.disabled,
-                      label: Text('不延迟'),
+                    ChoiceChip(
+                      label: const Text('不延迟'),
+                      selected: _randomDelayMode == _RandomDelayMode.disabled,
+                      onSelected: (_) => setState(
+                        () => _randomDelayMode = _RandomDelayMode.disabled,
+                      ),
                     ),
-                    ButtonSegment(
-                      value: _RandomDelayMode.custom,
-                      label: Text('自定义'),
+                    ChoiceChip(
+                      label: const Text('自定义'),
+                      selected: _randomDelayMode == _RandomDelayMode.custom,
+                      onSelected: (_) => setState(
+                        () => _randomDelayMode = _RandomDelayMode.custom,
+                      ),
                     ),
                   ],
-                  selected: {_randomDelayMode},
-                  onSelectionChanged: (s) =>
-                      setState(() => _randomDelayMode = s.first),
-                  style: ButtonStyle(visualDensity: VisualDensity.compact),
                 ),
                 if (_randomDelayMode == _RandomDelayMode.custom) ...[
                   const SizedBox(height: 10),

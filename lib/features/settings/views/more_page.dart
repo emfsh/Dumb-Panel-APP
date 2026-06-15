@@ -75,6 +75,28 @@ class _MorePageState extends ConsumerState<MorePage> {
     final user = auth.user;
     final theme = Theme.of(context);
     final isLight = theme.brightness == Brightness.light;
+    final adminQuickActions = [
+      (
+        icon: Icons.code,
+        label: '脚本',
+        onTap: () => context.push('/scripts'),
+      ),
+      (
+        icon: Icons.sync,
+        label: '订阅',
+        onTap: () => context.push('/subscriptions'),
+      ),
+      (
+        icon: Icons.inventory_2_outlined,
+        label: '依赖',
+        onTap: () => context.push('/deps'),
+      ),
+      (
+        icon: Icons.settings,
+        label: '系统',
+        onTap: () => context.push('/system-settings'),
+      ),
+    ];
 
     return Scaffold(
       body: ListView(
@@ -191,6 +213,21 @@ class _MorePageState extends ConsumerState<MorePage> {
             const SizedBox(height: 24),
             _SectionLabel('系统管理'),
             const SizedBox(height: 8),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: adminQuickActions
+                  .map(
+                    (item) => _AdminQuickAction(
+                      icon: item.icon,
+                      label: item.label,
+                      isLight: isLight,
+                      onTap: item.onTap,
+                    ),
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: 12),
             _SettingsItem(
               icon: Icons.code,
               title: '脚本管理',
@@ -567,6 +604,40 @@ class _SettingsItem extends StatelessWidget {
               color: isLight ? AppColors.slate400 : AppColors.slate600,
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminQuickAction extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isLight;
+  final VoidCallback onTap;
+
+  const _AdminQuickAction({
+    required this.icon,
+    required this.label,
+    required this.isLight,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: (MediaQuery.of(context).size.width - 60) / 2,
+      child: FilledButton.tonalIcon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 18),
+        label: Text(label),
+        style: FilledButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          backgroundColor: isLight ? AppColors.slate50 : AppColors.slate900,
+          foregroundColor: isLight ? AppColors.slate700 : AppColors.slate200,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
         ),
       ),
     );

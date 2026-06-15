@@ -160,14 +160,21 @@ class _NavItem extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(isActive ? activeIcon : icon, size: 24, color: color),
+            Icon(isActive ? activeIcon : icon, size: 22, color: color),
             const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                color: color,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+            SizedBox(
+              height: 12,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: color,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                ),
               ),
             ),
           ],
