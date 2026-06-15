@@ -69,6 +69,8 @@ class ApiEndpoints {
   static const String scripts = '$baseApi/scripts';
   static const String scriptsTree = '$baseApi/scripts/tree';
   static const String scriptsContent = '$baseApi/scripts/content';
+  static String scriptsDownload(String path) =>
+      '$baseApi/scripts/download?path=${Uri.encodeQueryComponent(path)}';
   static const String scriptsUpload = '$baseApi/scripts/upload';
   static const String scriptsDirectory = '$baseApi/scripts/directory';
   static const String scriptsRename = '$baseApi/scripts/rename';

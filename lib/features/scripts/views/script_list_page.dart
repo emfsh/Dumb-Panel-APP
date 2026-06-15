@@ -30,6 +30,9 @@ enum _ScriptEntryAction {
   open,
   addToTask,
   favorite,
+  download,
+  move,
+  copy,
   rename,
   delete,
   versions,
@@ -304,6 +307,52 @@ class ScriptNotifier extends StateNotifier<ScriptState> {
     return newPath;
   }
 
+  Future<String> movePath(String sourcePath, {String targetDir = ''}) async {
+    final response = await DioClient.instance.dio.put(
+      ApiEndpoints.scriptsMove,
+      data: {'source_path': sourcePath, 'target_dir': targetDir},
+    );
+    await loadTree();
+    final data = response.data;
+    final newPath = data is Map && data['new_path'] != null
+        ? data['new_path'].toString()
+        : _joinScriptPath(targetDir, sourcePath.split('/').last);
+
+    final selected = state.selectedPath;
+    if (selected == sourcePath) {
+      state = state.copyWith(selectedPath: newPath);
+    } else if (selected != null && selected.startsWith('$sourcePath/')) {
+      state = state.copyWith(
+        selectedPath: selected.replaceFirst(sourcePath, newPath),
+      );
+    }
+    return newPath;
+  }
+
+  Future<String> copyPath(
+    String sourcePath, {
+    String targetDir = '',
+    String newName = '',
+  }) async {
+    final response = await DioClient.instance.dio.post(
+      ApiEndpoints.scriptsCopy,
+      data: {
+        'source_path': sourcePath,
+        'target_dir': targetDir,
+        'new_name': newName,
+      },
+    );
+    await loadTree();
+    final data = response.data;
+    if (data is Map && data['new_path'] != null) {
+      return data['new_path'].toString();
+    }
+    final finalName = newName.trim().isEmpty
+        ? sourcePath.split('/').last
+        : newName.trim();
+    return _joinScriptPath(targetDir, finalName);
+  }
+
   Future<void> deletePath(String path, {required bool isDirectory}) async {
     await DioClient.instance.dio.delete(
       ApiEndpoints.scripts,
@@ -369,6 +418,20 @@ class ScriptNotifier extends StateNotifier<ScriptState> {
     }
     if (file.bytes != null) {
       return MultipartFile.fromBytes(file.bytes!, filename: file.name);
+    }
+    return null;
+  }
+
+  Uint8List? extractBytes(dynamic data) {
+    if (data is Uint8List) {
+      return data;
+    }
+    if (data is List<int>) {
+      return Uint8List.fromList(data);
+    }
+    if (data is List) {
+      final values = data.whereType<num>().map((item) => item.toInt()).toList();
+      return Uint8List.fromList(values);
     }
     return null;
   }
@@ -756,6 +819,13 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
               ),
             if (!file.isDirectory)
               ListTile(
+                leading: const Icon(Icons.download_outlined),
+                title: const Text('下载'),
+                onTap: () =>
+                    Navigator.pop(sheetContext, _ScriptEntryAction.download),
+              ),
+            if (!file.isDirectory)
+              ListTile(
                 leading: Icon(
                   _favoriteScriptPaths.contains(file.path)
                       ? Icons.push_pin_outlined
@@ -774,6 +844,18 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
                 onTap: () =>
                     Navigator.pop(sheetContext, _ScriptEntryAction.versions),
               ),
+            ListTile(
+              leading: const Icon(Icons.drive_file_move_outline),
+              title: Text(file.isDirectory ? '移动文件夹' : '移动文件'),
+              onTap: () =>
+                  Navigator.pop(sheetContext, _ScriptEntryAction.move),
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy_outlined),
+              title: Text(file.isDirectory ? '复制文件夹' : '复制文件'),
+              onTap: () =>
+                  Navigator.pop(sheetContext, _ScriptEntryAction.copy),
+            ),
             if (file.isDirectory)
               ListTile(
                 leading: const Icon(Icons.upload_file_outlined),
@@ -835,6 +917,15 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
         return;
       case _ScriptEntryAction.favorite:
         await _toggleFavoriteScript(file);
+        return;
+      case _ScriptEntryAction.download:
+        await _downloadScript(file);
+        return;
+      case _ScriptEntryAction.move:
+        await _showMoveDialog(file, state);
+        return;
+      case _ScriptEntryAction.copy:
+        await _showCopyDialog(file, state);
         return;
       case _ScriptEntryAction.rename:
         await _showRenameDialog(file);
@@ -990,6 +1081,215 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
     } catch (error) {
       _showMessage(_extractRequestError(error, '删除失败'));
     }
+  }
+
+  Future<void> _downloadScript(ScriptFile file) async {
+    try {
+      final response = await DioClient.instance.dio.get(
+        ApiEndpoints.scriptsDownload(file.path),
+        options: Options(responseType: ResponseType.bytes),
+      );
+      final bytes = ref.read(scriptProvider.notifier).extractBytes(response.data);
+      if (bytes == null || bytes.isEmpty) {
+        throw StateError('下载内容为空');
+      }
+
+      final savedPath = await FilePicker.platform.saveFile(
+        dialogTitle: '保存脚本文件',
+        fileName: file.name,
+        type: FileType.any,
+        bytes: bytes,
+      );
+      if (savedPath == null) {
+        _showMessage('已取消保存');
+        return;
+      }
+
+      _showMessage('脚本已保存');
+    } on UnsupportedError {
+      _showMessage('当前平台暂不支持直接保存文件');
+    } catch (error) {
+      _showMessage(_extractScriptError(error, '下载脚本失败'));
+    }
+  }
+
+  Future<void> _showMoveDialog(ScriptFile file, ScriptState state) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final folders = _scriptFolders(state.tree)
+        .where((folder) => folder != file.path)
+        .toList();
+    String targetDir = _defaultScriptDirectory(file.path);
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final navigator = Navigator.of(dialogContext);
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: Text(file.isDirectory ? '移动文件夹' : '移动文件'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '当前路径：${file.path}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.slate500,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: targetDir,
+                  decoration: const InputDecoration(labelText: '目标目录'),
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('根目录')),
+                    ...folders.map(
+                      (folder) => DropdownMenuItem(
+                        value: folder,
+                        child: Text(folder),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setDialogState(() => targetDir = value ?? '');
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => navigator.pop(),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  try {
+                    final newPath = await ref
+                        .read(scriptProvider.notifier)
+                        .movePath(file.path, targetDir: targetDir);
+                    if (!mounted) {
+                      return;
+                    }
+                    navigator.pop();
+                    _showMessage('已移动到 ${newPath.split('/').last}');
+                  } catch (error) {
+                    if (!mounted) {
+                      return;
+                    }
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(_extractScriptError(error, '移动失败')),
+                      ),
+                    );
+                  }
+                },
+                child: const Text('移动'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _showCopyDialog(ScriptFile file, ScriptState state) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final folders = _scriptFolders(state.tree);
+    final nameController = TextEditingController(text: file.name);
+    String targetDir = _defaultScriptDirectory(file.path);
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final navigator = Navigator.of(dialogContext);
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: Text(file.isDirectory ? '复制文件夹' : '复制文件'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '来源：${file.path}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.slate500,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: file.isDirectory ? '新文件夹名' : '新文件名',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: targetDir,
+                    decoration: const InputDecoration(labelText: '目标目录'),
+                    items: [
+                      const DropdownMenuItem(value: '', child: Text('根目录')),
+                      ...folders.map(
+                        (folder) => DropdownMenuItem(
+                          value: folder,
+                          child: Text(folder),
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      setDialogState(() => targetDir = value ?? '');
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => navigator.pop(),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  final newName = nameController.text.trim();
+                  if (newName.isEmpty) {
+                    messenger.showSnackBar(
+                      const SnackBar(content: Text('名称不能为空')),
+                    );
+                    return;
+                  }
+                  try {
+                    final newPath = await ref
+                        .read(scriptProvider.notifier)
+                        .copyPath(
+                          file.path,
+                          targetDir: targetDir,
+                          newName: newName,
+                        );
+                    if (!mounted) {
+                      return;
+                    }
+                    navigator.pop();
+                    _showMessage('已复制到 ${newPath.split('/').last}');
+                  } catch (error) {
+                    if (!mounted) {
+                      return;
+                    }
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(_extractScriptError(error, '复制失败')),
+                      ),
+                    );
+                  }
+                },
+                child: const Text('复制'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _showVersionSheet(String path) async {
