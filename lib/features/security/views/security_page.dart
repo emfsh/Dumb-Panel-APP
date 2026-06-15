@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/utils/api_utils.dart';
+import '../../../shared/utils/time_utils.dart';
 
 // ── Security Page (Tabbed) ──
 
@@ -178,20 +178,28 @@ class _LoginLogsTabState extends ConsumerState<_LoginLogsTab>
     if (confirmed != true) {
       return;
     }
-    await DioClient.instance.dio.delete(ApiEndpoints.loginLogs);
-    await _load();
-    if (!mounted) {
-      return;
+    try {
+      await DioClient.instance.dio.delete(ApiEndpoints.loginLogs);
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('登录日志已清理')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(extractErrorMessage(error, '清理登录日志失败'))),
+      );
     }
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('登录日志已清理')));
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final fmt = DateFormat('MM-dd HH:mm:ss');
     return RefreshIndicator(
       color: AppColors.primary,
       onRefresh: _load,
@@ -206,140 +214,146 @@ class _LoginLogsTabState extends ConsumerState<_LoginLogsTab>
               ],
             )
           : ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _usernameController,
-                  decoration: InputDecoration(
-                    hintText: '按用户名筛选',
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    suffixIcon: _usernameController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear, size: 16),
-                            onPressed: () {
-                              _usernameController.clear();
-                              setState(() {});
-                              _load();
-                            },
-                          )
-                        : null,
-                  ),
-                  onChanged: (_) => setState(() {}),
-                  onSubmitted: (_) => _load(),
-                ),
-              ),
-              const SizedBox(width: 10),
-              OutlinedButton.icon(
-                onPressed: _load,
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('刷新'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          FilledButton.tonalIcon(
-            onPressed: _clearLogs,
-            icon: const Icon(Icons.delete_sweep_outlined, size: 16),
-            label: const Text('清理登录日志'),
-            style: FilledButton.styleFrom(foregroundColor: AppColors.red500),
-          ),
-          const SizedBox(height: 12),
-          if (_logs.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 80),
-              child: Center(
-                child: Text(
-                  '暂无记录',
-                  style: TextStyle(color: AppColors.slate400),
-                ),
-              ),
-            )
-          else
-            ..._logs.map((log) {
-              final success = (log['status'] as num?)?.toInt() == 0;
-              final time = DateTime.tryParse(
-                log['created_at']?.toString() ?? '',
-              );
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  color: widget.isLight ? Colors.white : AppColors.slate900,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: widget.isLight
-                        ? AppColors.slate200
-                        : AppColors.slate800,
-                  ),
-                ),
-                child: Row(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+              children: [
+                Row(
                   children: [
-                    Icon(
-                      success ? Icons.check_circle : Icons.cancel,
-                      size: 18,
-                      color: success ? AppColors.primary : AppColors.red500,
+                    Expanded(
+                      child: TextField(
+                        controller: _usernameController,
+                        decoration: InputDecoration(
+                          hintText: '按用户名筛选',
+                          prefixIcon: const Icon(Icons.search, size: 18),
+                          suffixIcon: _usernameController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear, size: 16),
+                                  onPressed: () {
+                                    _usernameController.clear();
+                                    setState(() {});
+                                    _load();
+                                  },
+                                )
+                              : null,
+                        ),
+                        onChanged: (_) => setState(() {}),
+                        onSubmitted: (_) => _load(),
+                      ),
                     ),
                     const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            log['username']?.toString() ?? '',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${log['ip'] ?? ''} · ${log['message'] ?? ''}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: widget.isLight
-                                  ? AppColors.slate500
-                                  : AppColors.slate400,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            log['client_name']?.toString() ?? '客户端未知',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: widget.isLight
-                                  ? AppColors.slate500
-                                  : AppColors.slate400,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Text(
-                      time != null ? fmt.format(time.toLocal()) : '',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: widget.isLight
-                            ? AppColors.slate400
-                            : AppColors.slate500,
-                      ),
+                    OutlinedButton.icon(
+                      onPressed: _load,
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: const Text('刷新'),
                     ),
                   ],
                 ),
-              );
-            }),
-        ],
-      ),
+                const SizedBox(height: 10),
+                FilledButton.tonalIcon(
+                  onPressed: _clearLogs,
+                  icon: const Icon(Icons.delete_sweep_outlined, size: 16),
+                  label: const Text('清理登录日志'),
+                  style: FilledButton.styleFrom(
+                    foregroundColor: AppColors.red500,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (_logs.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 80),
+                    child: Center(
+                      child: Text(
+                        '暂无记录',
+                        style: TextStyle(color: AppColors.slate400),
+                      ),
+                    ),
+                  )
+                else
+                  ..._logs.map((log) {
+                    final success = (log['status'] as num?)?.toInt() == 0;
+                    final time = DateTime.tryParse(
+                      log['created_at']?.toString() ?? '',
+                    );
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: widget.isLight
+                            ? Colors.white
+                            : AppColors.slate900,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: widget.isLight
+                              ? AppColors.slate200
+                              : AppColors.slate800,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            success ? Icons.check_circle : Icons.cancel,
+                            size: 18,
+                            color: success
+                                ? AppColors.primary
+                                : AppColors.red500,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  log['username']?.toString() ?? '',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${log['ip'] ?? ''} · ${log['message'] ?? ''}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: widget.isLight
+                                        ? AppColors.slate500
+                                        : AppColors.slate400,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  log['client_name']?.toString() ?? '客户端未知',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: widget.isLight
+                                        ? AppColors.slate500
+                                        : AppColors.slate400,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            formatTimeCn(time),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: widget.isLight
+                                  ? AppColors.slate400
+                                  : AppColors.slate500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+              ],
+            ),
     );
   }
 }
@@ -406,8 +420,23 @@ class _SessionsTabState extends ConsumerState<_SessionsTab>
     if (confirmed != true) {
       return;
     }
-    await DioClient.instance.dio.delete(ApiEndpoints.sessionsOthers);
-    await _load();
+    try {
+      await DioClient.instance.dio.delete(ApiEndpoints.sessionsOthers);
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('其他会话已撤销')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(extractErrorMessage(error, '撤销其他会话失败'))),
+      );
+    }
   }
 
   Future<void> _revokeSession(int id) async {
@@ -432,14 +461,28 @@ class _SessionsTabState extends ConsumerState<_SessionsTab>
     if (confirmed != true) {
       return;
     }
-    await DioClient.instance.dio.delete(ApiEndpoints.sessionById(id));
-    await _load();
+    try {
+      await DioClient.instance.dio.delete(ApiEndpoints.sessionById(id));
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('会话已撤销')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(extractErrorMessage(error, '撤销会话失败'))),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final fmt = DateFormat('MM-dd HH:mm');
     return RefreshIndicator(
       color: AppColors.primary,
       onRefresh: _load,
@@ -465,7 +508,10 @@ class _SessionsTabState extends ConsumerState<_SessionsTab>
                     child: OutlinedButton.icon(
                       onPressed: _revokeOthers,
                       icon: const Icon(Icons.logout, size: 16),
-                      label: const Text('撤销其他会话', style: TextStyle(fontSize: 12)),
+                      label: const Text(
+                        '撤销其他会话',
+                        style: TextStyle(fontSize: 12),
+                      ),
                     ),
                   ),
                 ),
@@ -492,7 +538,10 @@ class _SessionsTabState extends ConsumerState<_SessionsTab>
                       child: OutlinedButton.icon(
                         onPressed: _revokeOthers,
                         icon: const Icon(Icons.logout, size: 16),
-                        label: const Text('撤销其他会话', style: TextStyle(fontSize: 12)),
+                        label: const Text(
+                          '撤销其他会话',
+                          style: TextStyle(fontSize: 12),
+                        ),
                       ),
                     ),
                   );
@@ -508,9 +557,7 @@ class _SessionsTabState extends ConsumerState<_SessionsTab>
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    color: widget.isLight
-                        ? Colors.white
-                        : AppColors.slate900,
+                    color: widget.isLight ? Colors.white : AppColors.slate900,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: widget.isLight
@@ -540,7 +587,7 @@ class _SessionsTabState extends ConsumerState<_SessionsTab>
                             const SizedBox(height: 2),
                             Text(
                               expires != null
-                                  ? '过期: ${fmt.format(expires.toLocal())}'
+                                  ? '过期: ${formatTimeCn(expires)}'
                                   : '',
                               style: TextStyle(
                                 fontSize: 11,
@@ -559,8 +606,7 @@ class _SessionsTabState extends ConsumerState<_SessionsTab>
                                     : AppColors.slate400,
                               ),
                             ),
-                            if ((s['user_agent']?.toString() ?? '')
-                                .isNotEmpty)
+                            if ((s['user_agent']?.toString() ?? '').isNotEmpty)
                               Text(
                                 'UA: ${s['user_agent']}',
                                 style: TextStyle(
@@ -637,6 +683,53 @@ class _IpWhitelistTabState extends ConsumerState<_IpWhitelistTab>
     }
   }
 
+  Future<void> _deleteItem(Map<String, dynamic> item) async {
+    final id = (item['id'] as num?)?.toInt();
+    if (id == null) {
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('删除白名单'),
+        content: Text('确定删除 IP「${item['ip'] ?? ''}」吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red500),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    try {
+      await DioClient.instance.dio.delete(ApiEndpoints.ipWhitelistById(id));
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('IP 白名单已删除')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(extractErrorMessage(error, '删除 IP 白名单失败'))),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -665,7 +758,10 @@ class _IpWhitelistTabState extends ConsumerState<_IpWhitelistTab>
                     child: FilledButton.icon(
                       onPressed: _showAddDialog,
                       icon: const Icon(Icons.add, size: 16),
-                      label: const Text('添加 IP', style: TextStyle(fontSize: 12)),
+                      label: const Text(
+                        '添加 IP',
+                        style: TextStyle(fontSize: 12),
+                      ),
                     ),
                   ),
                 ),
@@ -692,7 +788,10 @@ class _IpWhitelistTabState extends ConsumerState<_IpWhitelistTab>
                       child: FilledButton.icon(
                         onPressed: _showAddDialog,
                         icon: const Icon(Icons.add, size: 16),
-                        label: const Text('添加 IP', style: TextStyle(fontSize: 12)),
+                        label: const Text(
+                          '添加 IP',
+                          style: TextStyle(fontSize: 12),
+                        ),
                       ),
                     ),
                   );
@@ -705,9 +804,7 @@ class _IpWhitelistTabState extends ConsumerState<_IpWhitelistTab>
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    color: widget.isLight
-                        ? Colors.white
-                        : AppColors.slate900,
+                    color: widget.isLight ? Colors.white : AppColors.slate900,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: widget.isLight
@@ -735,8 +832,7 @@ class _IpWhitelistTabState extends ConsumerState<_IpWhitelistTab>
                                 fontFamily: 'monospace',
                               ),
                             ),
-                            if ((item['remarks']?.toString() ?? '')
-                                .isNotEmpty)
+                            if ((item['remarks']?.toString() ?? '').isNotEmpty)
                               Text(
                                 item['remarks'].toString(),
                                 style: TextStyle(
@@ -750,15 +846,7 @@ class _IpWhitelistTabState extends ConsumerState<_IpWhitelistTab>
                         ),
                       ),
                       GestureDetector(
-                        onTap: () async {
-                          final id = (item['id'] as num?)?.toInt();
-                          if (id != null) {
-                            await DioClient.instance.dio.delete(
-                              ApiEndpoints.ipWhitelistById(id),
-                            );
-                            _load();
-                          }
-                        },
+                        onTap: () => _deleteItem(item),
                         child: const Icon(
                           Icons.delete_outline,
                           size: 18,
@@ -813,15 +901,37 @@ class _IpWhitelistTabState extends ConsumerState<_IpWhitelistTab>
                   child: FilledButton(
                     onPressed: () async {
                       if (ipC.text.trim().isEmpty) return;
-                      await DioClient.instance.dio.post(
-                        ApiEndpoints.ipWhitelist,
-                        data: {
-                          'ip': ipC.text.trim(),
-                          'remarks': remarksC.text.trim(),
-                        },
-                      );
-                      Navigator.pop(dialogCtx);
-                      _load();
+                      try {
+                        await DioClient.instance.dio.post(
+                          ApiEndpoints.ipWhitelist,
+                          data: {
+                            'ip': ipC.text.trim(),
+                            'remarks': remarksC.text.trim(),
+                          },
+                        );
+                        if (!mounted) {
+                          return;
+                        }
+                        Navigator.of(dialogCtx).pop();
+                        await _load();
+                        if (!mounted) {
+                          return;
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('IP 白名单已添加')),
+                        );
+                      } catch (error) {
+                        if (!mounted) {
+                          return;
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              extractErrorMessage(error, '添加 IP 白名单失败'),
+                            ),
+                          ),
+                        );
+                      }
                     },
                     child: const Text('添加'),
                   ),
@@ -996,7 +1106,14 @@ class _TwoFaTabState extends ConsumerState<_TwoFaTab>
           _secret = data['secret']?.toString();
         });
       }
-    } catch (_) {}
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(extractErrorMessage(error, '获取 2FA 密钥失败'))),
+      );
+    }
   }
 
   Future<void> _verify2FA(String code) async {
@@ -1024,10 +1141,66 @@ class _TwoFaTabState extends ConsumerState<_TwoFaTab>
   }
 
   Future<void> _disable2FA() async {
+    final codeController = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('禁用两步验证'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('请输入当前验证器里的 6 位动态验证码后再禁用。'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: codeController,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              decoration: const InputDecoration(
+                labelText: '动态验证码',
+                hintText: '6位数字',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(dialogCtx, codeController.text.trim()),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.red500),
+            child: const Text('禁用'),
+          ),
+        ],
+      ),
+    );
+    codeController.dispose();
+    if (code == null || code.length != 6) {
+      return;
+    }
     try {
-      await DioClient.instance.dio.delete(ApiEndpoints.twoFa);
+      await DioClient.instance.dio.delete(
+        ApiEndpoints.twoFa,
+        data: {'code': code},
+      );
+      if (!mounted) {
+        return;
+      }
       setState(() => _enabled = false);
-    } catch (_) {}
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('2FA 已禁用')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(extractErrorMessage(error, '禁用 2FA 失败'))),
+      );
+    }
   }
 }
 

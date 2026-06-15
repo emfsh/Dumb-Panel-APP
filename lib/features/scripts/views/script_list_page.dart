@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/network/dio_client.dart';
@@ -16,6 +15,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/utils/api_utils.dart';
 import '../../../shared/utils/ansi_text.dart';
 import '../../../shared/utils/log_background.dart';
+import '../../../shared/utils/time_utils.dart';
 import '../../tasks/views/task_form_page.dart';
 
 final scriptProvider = StateNotifierProvider<ScriptNotifier, ScriptState>((
@@ -847,14 +847,12 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
             ListTile(
               leading: const Icon(Icons.drive_file_move_outline),
               title: Text(file.isDirectory ? '移动文件夹' : '移动文件'),
-              onTap: () =>
-                  Navigator.pop(sheetContext, _ScriptEntryAction.move),
+              onTap: () => Navigator.pop(sheetContext, _ScriptEntryAction.move),
             ),
             ListTile(
               leading: const Icon(Icons.copy_outlined),
               title: Text(file.isDirectory ? '复制文件夹' : '复制文件'),
-              onTap: () =>
-                  Navigator.pop(sheetContext, _ScriptEntryAction.copy),
+              onTap: () => Navigator.pop(sheetContext, _ScriptEntryAction.copy),
             ),
             if (file.isDirectory)
               ListTile(
@@ -1089,7 +1087,9 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
         ApiEndpoints.scriptsDownload(file.path),
         options: Options(responseType: ResponseType.bytes),
       );
-      final bytes = ref.read(scriptProvider.notifier).extractBytes(response.data);
+      final bytes = ref
+          .read(scriptProvider.notifier)
+          .extractBytes(response.data);
       if (bytes == null || bytes.isEmpty) {
         throw StateError('下载内容为空');
       }
@@ -1115,9 +1115,9 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
 
   Future<void> _showMoveDialog(ScriptFile file, ScriptState state) async {
     final messenger = ScaffoldMessenger.of(context);
-    final folders = _scriptFolders(state.tree)
-        .where((folder) => folder != file.path)
-        .toList();
+    final folders = _scriptFolders(
+      state.tree,
+    ).where((folder) => folder != file.path).toList();
     String targetDir = _defaultScriptDirectory(file.path);
 
     await showDialog<void>(
@@ -1145,10 +1145,8 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
                   items: [
                     const DropdownMenuItem(value: '', child: Text('根目录')),
                     ...folders.map(
-                      (folder) => DropdownMenuItem(
-                        value: folder,
-                        child: Text(folder),
-                      ),
+                      (folder) =>
+                          DropdownMenuItem(value: folder, child: Text(folder)),
                     ),
                   ],
                   onChanged: (value) {
@@ -2379,7 +2377,6 @@ class _ScriptVersionSheetState extends ConsumerState<_ScriptVersionSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final dateFormat = DateFormat('MM-dd HH:mm:ss');
 
     return SafeArea(
       child: SizedBox(
@@ -2481,9 +2478,7 @@ class _ScriptVersionSheetState extends ConsumerState<_ScriptVersionSheet> {
                                 const SizedBox(height: 8),
                                 Text(
                                   version.createdAt != null
-                                      ? dateFormat.format(
-                                          version.createdAt!.toLocal(),
-                                        )
+                                      ? formatTimeCn(version.createdAt)
                                       : '未知时间',
                                   style: TextStyle(
                                     fontSize: 12,

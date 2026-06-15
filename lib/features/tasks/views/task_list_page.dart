@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/network/dio_client.dart';
@@ -14,6 +13,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/task.dart';
 import '../../../shared/utils/ansi_text.dart';
 import '../../../shared/utils/api_utils.dart';
+import '../../../shared/utils/time_utils.dart';
 import '../../../shared/utils/log_background.dart';
 import '../../../shared/widgets/task_cron_list.dart';
 import '../providers/task_provider.dart';
@@ -229,9 +229,7 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
     final groupOrderRaw = await SecureStorage.getUiState(_groupOrderStorageKey);
     final savedGroupOrder = <String>[];
     if (groupOrderRaw != null && groupOrderRaw.trim().isNotEmpty) {
-      savedGroupOrder.addAll(
-        groupOrderRaw.split('\n').map((s) => s.trim()),
-      );
+      savedGroupOrder.addAll(groupOrderRaw.split('\n').map((s) => s.trim()));
     }
     if (!mounted) return;
     setState(() {
@@ -241,9 +239,9 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
       _groupOrder = savedGroupOrder;
     });
     if (selectedGroup != null) {
-      ref.read(taskProvider.notifier).setLabelFilter(
-        selectedGroup.trim().isEmpty ? null : selectedGroup,
-      );
+      ref
+          .read(taskProvider.notifier)
+          .setLabelFilter(selectedGroup.trim().isEmpty ? null : selectedGroup);
     }
   }
 
@@ -301,12 +299,13 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
   }
 
   void _collectKnownGroups(List<Task> tasks) {
-    final groups = tasks
-        .map((task) => task.groupName?.trim() ?? '')
-        .where((group) => group.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
+    final groups =
+        tasks
+            .map((task) => task.groupName?.trim() ?? '')
+            .where((group) => group.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
     _knownGroups
       ..clear()
       ..addAll(groups);
@@ -321,10 +320,7 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const ListTile(
-              title: Text('选择任务分组'),
-              subtitle: Text('可筛选已有分组任务'),
-            ),
+            const ListTile(title: Text('选择任务分组'), subtitle: Text('可筛选已有分组任务')),
             ListTile(
               leading: const Icon(Icons.layers_clear_outlined),
               title: const Text('全部分组'),
@@ -352,7 +348,9 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
     if (_scrollController.hasClients && _scrollController.offset > 0) {
       _scrollController.jumpTo(0);
     }
-    ref.read(taskProvider.notifier).setLabelFilter(selected.isEmpty ? null : selected);
+    ref
+        .read(taskProvider.notifier)
+        .setLabelFilter(selected.isEmpty ? null : selected);
     await SecureStorage.saveUiState(_selectedGroupStorageKey, selected);
   }
 
@@ -513,7 +511,11 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                   TextButton.icon(
                     onPressed: _showGroupPicker,
                     icon: const Icon(Icons.label_outline, size: 16),
-                    label: Text(state.labelFilter?.isNotEmpty == true ? state.labelFilter! : '全部分组'),
+                    label: Text(
+                      state.labelFilter?.isNotEmpty == true
+                          ? state.labelFilter!
+                          : '全部分组',
+                    ),
                   ),
                   if (state.statusFilter != null || state.labelFilter != null)
                     TextButton(
@@ -625,7 +627,10 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('取消'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
             child: const Text('确定'),
@@ -636,11 +641,13 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
     controller.dispose();
     if (newName == null || newName.isEmpty || newName == oldName) return;
     try {
-      await ref.read(taskProvider.notifier).batchUpdateGroupLabel(
-        tasks: tasks,
-        oldGroupName: oldName,
-        newGroupName: newName,
-      );
+      await ref
+          .read(taskProvider.notifier)
+          .batchUpdateGroupLabel(
+            tasks: tasks,
+            oldGroupName: oldName,
+            newGroupName: newName,
+          );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('已将分组 "$oldName" 重命名为 "$newName"')),
@@ -648,9 +655,9 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('重命名分组失败')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('重命名分组失败')));
       }
     }
   }
@@ -660,9 +667,12 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('删除分组'),
-        content: Text('确定将 "${groupName}" 分组中的 ${tasks.length} 个任务移回未分组？'),
+        content: Text('确定将 "$groupName" 分组中的 ${tasks.length} 个任务移回未分组？'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('确定', style: TextStyle(color: Colors.red)),
@@ -672,30 +682,35 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
     );
     if (confirmed != true) return;
     try {
-      await ref.read(taskProvider.notifier).batchUpdateGroupLabel(
-        tasks: tasks,
-        oldGroupName: groupName,
-        newGroupName: null,
-      );
+      await ref
+          .read(taskProvider.notifier)
+          .batchUpdateGroupLabel(
+            tasks: tasks,
+            oldGroupName: groupName,
+            newGroupName: null,
+          );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('已删除分组 "$groupName"')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('已删除分组 "$groupName"')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('删除分组失败')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('删除分组失败')));
       }
     }
   }
 
-  Future<void> _addTasksToGroup(String targetGroup, List<Task> ungroupedTasks) async {
+  Future<void> _addTasksToGroup(
+    String targetGroup,
+    List<Task> ungroupedTasks,
+  ) async {
     if (ungroupedTasks.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('没有未分组的任务可添加')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('没有未分组的任务可添加')));
       return;
     }
     final selected = <int>{};
@@ -729,28 +744,39 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
             TextButton(
               onPressed: () async {
                 Navigator.pop(ctx);
                 if (selected.isEmpty) return;
-                final tasksToMove = ungroupedTasks.where((t) => selected.contains(t.id)).toList();
+                final tasksToMove = ungroupedTasks
+                    .where((t) => selected.contains(t.id))
+                    .toList();
                 try {
-                  await ref.read(taskProvider.notifier).batchUpdateGroupLabel(
-                    tasks: tasksToMove,
-                    oldGroupName: null,
-                    newGroupName: targetGroup,
-                  );
+                  await ref
+                      .read(taskProvider.notifier)
+                      .batchUpdateGroupLabel(
+                        tasks: tasksToMove,
+                        oldGroupName: null,
+                        newGroupName: targetGroup,
+                      );
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('已将 ${tasksToMove.length} 个任务添加到 "$targetGroup"')),
+                      SnackBar(
+                        content: Text(
+                          '已将 ${tasksToMove.length} 个任务添加到 "$targetGroup"',
+                        ),
+                      ),
                     );
                   }
                 } catch (e) {
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('添加任务到分组失败')),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('添加任务到分组失败')));
                   }
                 }
               },
@@ -785,7 +811,10 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text('选择要加入的任务:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                const Text(
+                  '选择要加入的任务:',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
                 const SizedBox(height: 8),
                 Expanded(
                   child: ListView.builder(
@@ -794,7 +823,10 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                       final task = ungroupedTasks[i];
                       return CheckboxListTile(
                         value: selected.contains(task.id),
-                        title: Text(task.name, style: const TextStyle(fontSize: 14)),
+                        title: Text(
+                          task.name,
+                          style: const TextStyle(fontSize: 14),
+                        ),
                         dense: true,
                         onChanged: (v) {
                           setDialogState(() {
@@ -813,29 +845,40 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
             TextButton(
               onPressed: () async {
                 final groupName = nameController.text.trim();
                 Navigator.pop(ctx);
                 if (groupName.isEmpty || selected.isEmpty) return;
-                final tasksToMove = ungroupedTasks.where((t) => selected.contains(t.id)).toList();
+                final tasksToMove = ungroupedTasks
+                    .where((t) => selected.contains(t.id))
+                    .toList();
                 try {
-                  await ref.read(taskProvider.notifier).batchUpdateGroupLabel(
-                    tasks: tasksToMove,
-                    oldGroupName: null,
-                    newGroupName: groupName,
-                  );
+                  await ref
+                      .read(taskProvider.notifier)
+                      .batchUpdateGroupLabel(
+                        tasks: tasksToMove,
+                        oldGroupName: null,
+                        newGroupName: groupName,
+                      );
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('已创建分组 "$groupName" 并添加 ${tasksToMove.length} 个任务')),
+                      SnackBar(
+                        content: Text(
+                          '已创建分组 "$groupName" 并添加 ${tasksToMove.length} 个任务',
+                        ),
+                      ),
                     );
                   }
                 } catch (e) {
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('创建分组失败')),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('创建分组失败')));
                   }
                 }
               },
@@ -858,7 +901,10 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
               const Icon(Icons.swap_vert, size: 18),
               const SizedBox(width: 8),
               const Expanded(
-                child: Text('长按拖拽调整分组顺序', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text(
+                  '长按拖拽调整分组顺序',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
               ),
               TextButton(
                 onPressed: () => setState(() => _groupReorderMode = false),
@@ -885,7 +931,10 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
               return Container(
                 key: ValueKey(group.key),
                 margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
                   color: isLight ? Colors.white : AppColors.slate900,
                   borderRadius: BorderRadius.circular(14),
@@ -895,17 +944,27 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.drag_handle, size: 20, color: AppColors.slate400),
+                    const Icon(
+                      Icons.drag_handle,
+                      size: 20,
+                      color: AppColors.slate400,
+                    ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         group.title,
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                     Text(
                       '${group.tasks.length} 条',
-                      style: const TextStyle(fontSize: 12, color: AppColors.slate400),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.slate400,
+                      ),
                     ),
                   ],
                 ),
@@ -988,11 +1047,17 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                   const SizedBox(width: 4),
                   _GroupPopupMenu(
                     isUngrouped: isUngrouped,
-                    onRename: isUngrouped ? null : () => _renameGroup(group.key, group.tasks),
-                    onDelete: isUngrouped ? null : () => _deleteGroup(group.key, group.tasks),
+                    onRename: isUngrouped
+                        ? null
+                        : () => _renameGroup(group.key, group.tasks),
+                    onDelete: isUngrouped
+                        ? null
+                        : () => _deleteGroup(group.key, group.tasks),
                     onAddTasks: () {
                       final allTasks = ref.read(taskProvider).tasks;
-                      final ungrouped = allTasks.where((t) => (t.groupName ?? '').isEmpty).toList();
+                      final ungrouped = allTasks
+                          .where((t) => (t.groupName ?? '').isEmpty)
+                          .toList();
                       final targetGroup = isUngrouped ? null : group.key;
                       if (targetGroup == null) {
                         _showCreateGroupFromUngrouped(ungrouped);
@@ -1217,12 +1282,10 @@ class _TaskCard extends StatelessWidget {
       return '点击查看实时日志';
     }
     if (task.lastRunStatus == 1 && task.lastRunAt != null) {
-      final fmt = DateFormat('MM-dd HH:mm');
-      return '上次失败：${fmt.format(task.lastRunAt!.toLocal())}';
+      return '上次失败：${formatTimeCn(task.lastRunAt, short: true)}';
     }
     if (task.nextRunAt != null) {
-      final fmt = DateFormat('MM-dd HH:mm');
-      return '下次运行：${fmt.format(task.nextRunAt!.toLocal())}';
+      return '下次运行：${formatTimeCn(task.nextRunAt, short: true)}';
     }
     if (task.taskType == 'manual') {
       return '手动触发';
@@ -1464,9 +1527,13 @@ class _TaskCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 6),
                 _SmallIconBtn(
-                  icon: task.isPinned ? Icons.push_pin_outlined : Icons.push_pin,
+                  icon: task.isPinned
+                      ? Icons.push_pin_outlined
+                      : Icons.push_pin,
                   onTap: onTogglePinned,
-                  color: task.isPinned ? AppColors.amber500 : AppColors.slate400,
+                  color: task.isPinned
+                      ? AppColors.amber500
+                      : AppColors.slate400,
                 ),
                 const SizedBox(width: 6),
                 _SmallIconBtn(icon: Icons.edit_outlined, onTap: onEdit),
@@ -1594,11 +1661,10 @@ List<String> _splitCommandTokens(String command) {
 }
 
 class _MetaChip extends StatelessWidget {
-  final IconData? icon;
   final String label;
   final bool active;
 
-  const _MetaChip({this.icon, required this.label, this.active = true});
+  const _MetaChip({required this.label, this.active = true});
 
   @override
   Widget build(BuildContext context) {
@@ -1623,10 +1689,6 @@ class _MetaChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[
-            Icon(icon, size: 12, color: foreground),
-            const SizedBox(width: 6),
-          ],
           Text(
             label,
             style: TextStyle(
@@ -1818,9 +1880,7 @@ class TaskDetailSheet extends StatelessWidget {
                         Text(
                           task.lastRunAt == null
                               ? '-'
-                              : DateFormat(
-                                  'yyyy-MM-dd HH:mm:ss',
-                                ).format(task.lastRunAt!.toLocal()),
+                              : formatTimeCn(task.lastRunAt),
                           style: const TextStyle(fontSize: 13),
                         ),
                       ),
@@ -1829,9 +1889,7 @@ class TaskDetailSheet extends StatelessWidget {
                         Text(
                           task.nextRunAt == null
                               ? '-'
-                              : DateFormat(
-                                  'yyyy-MM-dd HH:mm:ss',
-                                ).format(task.nextRunAt!.toLocal()),
+                              : formatTimeCn(task.nextRunAt),
                           style: const TextStyle(fontSize: 13),
                         ),
                       ),
@@ -2177,7 +2235,10 @@ class _TaskLiveLogPageState extends ConsumerState<TaskLiveLogPage> {
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: _lines.join('\n')));
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('日志已复制到剪贴板'), duration: Duration(seconds: 2)),
+                  const SnackBar(
+                    content: Text('日志已复制到剪贴板'),
+                    duration: Duration(seconds: 2),
+                  ),
                 );
               },
             ),
@@ -2271,10 +2332,7 @@ class _GroupPopupMenu extends StatelessWidget {
           const PopupMenuItem(value: 'rename', child: Text('重命名分组')),
         if (!isUngrouped && onDelete != null)
           const PopupMenuItem(value: 'delete', child: Text('删除分组')),
-        PopupMenuItem(
-          value: 'add',
-          child: Text(isUngrouped ? '新建分组' : '添加任务'),
-        ),
+        PopupMenuItem(value: 'add', child: Text(isUngrouped ? '新建分组' : '添加任务')),
       ],
       onSelected: (value) {
         switch (value) {

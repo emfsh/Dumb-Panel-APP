@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/models/task_log.dart';
 import '../../../shared/utils/api_utils.dart';
+import '../../../shared/utils/time_utils.dart';
 
 final logListProvider = StateNotifierProvider<LogListNotifier, LogListState>((
   ref,
@@ -251,7 +251,10 @@ class _LogListPageState extends ConsumerState<LogListPage> {
         title: const Text('批量删除'),
         content: Text('确定要删除选中的 $count 条日志吗？'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: AppColors.red500),
@@ -262,7 +265,9 @@ class _LogListPageState extends ConsumerState<LogListPage> {
     );
     if (confirmed != true) return;
     try {
-      await ref.read(logListProvider.notifier).batchDelete(_selectedIds.toList());
+      await ref
+          .read(logListProvider.notifier)
+          .batchDelete(_selectedIds.toList());
       _exitSelectionMode();
       _showMessage('已删除 $count 条日志');
     } catch (e) {
@@ -297,7 +302,9 @@ class _LogListPageState extends ConsumerState<LogListPage> {
     );
     if (days == null) return;
     try {
-      await ref.read(logListProvider.notifier).clean(days: days == 0 ? null : days);
+      await ref
+          .read(logListProvider.notifier)
+          .clean(days: days == 0 ? null : days);
       _exitSelectionMode();
       _showMessage(days == 0 ? '已清理全部日志' : '已清理 $days 天前的日志');
     } catch (e) {
@@ -342,7 +349,6 @@ class _LogListPageState extends ConsumerState<LogListPage> {
     });
     final state = ref.watch(logListProvider);
     final isLight = Theme.of(context).brightness == Brightness.light;
-    final dateFormat = DateFormat('MM-dd HH:mm:ss');
 
     return Scaffold(
       body: Padding(
@@ -357,24 +363,38 @@ class _LogListPageState extends ConsumerState<LogListPage> {
                     child: _selectionMode
                         ? Text(
                             '已选 ${_selectedIds.length} 条',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
                           )
                         : const Text(
                             '运行日志',
-                            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                   ),
                   if (_selectionMode) ...[
                     IconButton(
                       icon: Icon(
-                        _selectedIds.length == state.logs.length ? Icons.deselect : Icons.select_all,
+                        _selectedIds.length == state.logs.length
+                            ? Icons.deselect
+                            : Icons.select_all,
                         size: 20,
                       ),
                       onPressed: () => _toggleSelectAll(state.logs),
-                      tooltip: _selectedIds.length == state.logs.length ? '取消全选' : '全选',
+                      tooltip: _selectedIds.length == state.logs.length
+                          ? '取消全选'
+                          : '全选',
                     ),
                     IconButton(
-                      icon: const Icon(Icons.delete_outline, size: 20, color: AppColors.red500),
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        size: 20,
+                        color: AppColors.red500,
+                      ),
                       onPressed: _batchDeleteSelected,
                       tooltip: '批量删除',
                     ),
@@ -385,7 +405,10 @@ class _LogListPageState extends ConsumerState<LogListPage> {
                     ),
                   ] else ...[
                     IconButton(
-                      icon: const Icon(Icons.cleaning_services_outlined, size: 20),
+                      icon: const Icon(
+                        Icons.cleaning_services_outlined,
+                        size: 20,
+                      ),
                       onPressed: _showCleanDialog,
                       tooltip: '清理日志',
                     ),
@@ -480,9 +503,7 @@ class _LogListPageState extends ConsumerState<LogListPage> {
                       selected: state.statusFilter == 0,
                       onTap: () {
                         _resetScroll();
-                        ref
-                            .read(logListProvider.notifier)
-                            .setStatusFilter(0);
+                        ref.read(logListProvider.notifier).setStatusFilter(0);
                       },
                     ),
                     _StatusFilterChip(
@@ -490,9 +511,7 @@ class _LogListPageState extends ConsumerState<LogListPage> {
                       selected: state.statusFilter == 1,
                       onTap: () {
                         _resetScroll();
-                        ref
-                            .read(logListProvider.notifier)
-                            .setStatusFilter(1);
+                        ref.read(logListProvider.notifier).setStatusFilter(1);
                       },
                       selectedColor: AppColors.red500,
                     ),
@@ -501,9 +520,7 @@ class _LogListPageState extends ConsumerState<LogListPage> {
                       selected: state.statusFilter == 2,
                       onTap: () {
                         _resetScroll();
-                        ref
-                            .read(logListProvider.notifier)
-                            .setStatusFilter(2);
+                        ref.read(logListProvider.notifier).setStatusFilter(2);
                       },
                       selectedColor: AppColors.blue500,
                     ),
@@ -559,7 +576,6 @@ class _LogListPageState extends ConsumerState<LogListPage> {
                           return _LogItem(
                             log: log,
                             isLight: isLight,
-                            dateFormat: dateFormat,
                             selectionMode: _selectionMode,
                             selected: _selectedIds.contains(log.id),
                             onView: () {
@@ -590,7 +606,6 @@ class _LogListPageState extends ConsumerState<LogListPage> {
 class _LogItem extends StatelessWidget {
   final TaskLog log;
   final bool isLight;
-  final DateFormat dateFormat;
   final VoidCallback onView;
   final VoidCallback onDelete;
   final VoidCallback? onLongPress;
@@ -600,7 +615,6 @@ class _LogItem extends StatelessWidget {
   const _LogItem({
     required this.log,
     required this.isLight,
-    required this.dateFormat,
     required this.onView,
     required this.onDelete,
     this.onLongPress,
@@ -620,100 +634,104 @@ class _LogItem extends StatelessWidget {
     return GestureDetector(
       onLongPress: onLongPress,
       child: Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: selected
-            ? (isLight ? AppColors.primary.withAlpha(12) : AppColors.primary.withAlpha(20))
-            : (isLight ? Colors.white : AppColors.slate900),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
           color: selected
-              ? AppColors.primary.withAlpha(80)
-              : (isLight ? AppColors.slate200 : AppColors.slate800),
+              ? (isLight
+                    ? AppColors.primary.withAlpha(12)
+                    : AppColors.primary.withAlpha(20))
+              : (isLight ? Colors.white : AppColors.slate900),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected
+                ? AppColors.primary.withAlpha(80)
+                : (isLight ? AppColors.slate200 : AppColors.slate800),
+          ),
+          boxShadow: isLight
+              ? [
+                  BoxShadow(
+                    color: AppColors.slate900.withAlpha(8),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
+              : null,
         ),
-        boxShadow: isLight
-            ? [
-                BoxShadow(
-                  color: AppColors.slate900.withAlpha(8),
-                  blurRadius: 18,
-                  offset: const Offset(0, 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (selectionMode) ...[
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Checkbox(
+                  value: selected,
+                  onChanged: (_) => onView(),
+                  activeColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4),
+                  ),
                 ),
-              ]
-            : null,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          if (selectionMode) ...[
-            SizedBox(
-              width: 24,
-              height: 24,
-              child: Checkbox(
-                value: selected,
-                onChanged: (_) => onView(),
-                activeColor: AppColors.primary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              ),
+              const SizedBox(width: 10),
+            ] else ...[
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+              ),
+            ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: InkWell(
+                onTap: onView,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        log.taskName ?? '任务 #${log.taskId}',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Theme.of(context).colorScheme.onSurface,
+                          height: 1.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '运行时间 ${formatTimeCn(log.startedAt)} · ${log.durationText}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: isLight
+                              ? AppColors.slate500
+                              : AppColors.slate400,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-            const SizedBox(width: 10),
-          ] else ...[
-            Container(
-              width: 12,
-              height: 12,
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: '删除日志',
+              onPressed: onDelete,
+              visualDensity: VisualDensity.compact,
+              splashRadius: 20,
+              icon: const Icon(Icons.delete_outline, size: 20),
+              color: AppColors.red500,
             ),
           ],
-          const SizedBox(width: 12),
-          Expanded(
-            child: InkWell(
-              onTap: onView,
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      log.taskName ?? '任务 #${log.taskId}',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: Theme.of(context).colorScheme.onSurface,
-                        height: 1.2,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '运行时间 ${dateFormat.format(log.startedAt.toLocal())} · ${log.durationText}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: isLight
-                            ? AppColors.slate500
-                            : AppColors.slate400,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            tooltip: '删除日志',
-            onPressed: onDelete,
-            visualDensity: VisualDensity.compact,
-            splashRadius: 20,
-            icon: const Icon(Icons.delete_outline, size: 20),
-            color: AppColors.red500,
-          ),
-        ],
+        ),
       ),
-    ),
     );
   }
 }

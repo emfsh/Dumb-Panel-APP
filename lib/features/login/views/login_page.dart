@@ -9,8 +9,7 @@ import '../../dashboard/providers/dashboard_provider.dart';
 import '../widgets/geetest_captcha_dialog.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
-  const LoginPage({super.key, this.skipAutoLogin = false});
-  final bool skipAutoLogin;
+  const LoginPage({super.key});
 
   @override
   ConsumerState<LoginPage> createState() => _LoginPageState();
@@ -99,6 +98,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     if (mounted) setState(() {});
 
     if (ref.read(authProvider).status == AuthStatus.authenticated) {
+      if (mounted) {
+        context.go('/dashboard');
+      }
       return;
     }
 
@@ -108,16 +110,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       final authState = ref.read(authProvider);
       if (mounted) setState(() => _needsInit = authState.needsInit);
     } catch (_) {}
-
-    if (!mounted) return;
-    if (!widget.skipAutoLogin &&
-        _autoLogin &&
-        _usernameController.text.isNotEmpty &&
-        _passwordController.text.isNotEmpty &&
-        !_needsInit) {
-      await Future.delayed(const Duration(milliseconds: 100));
-      if (mounted) _submit();
-    }
   }
 
   Future<void> _submit() async {
@@ -195,6 +187,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         ref.invalidate(dashboardProvider);
         await ref.read(dashboardProvider.notifier).load();
       } catch (_) {}
+
+      if (mounted) {
+        context.go('/dashboard');
+      }
     } catch (e) {
       setState(() {
         _error = e is _LoginFlowMessage
@@ -260,170 +256,96 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                    // Logo
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withAlpha(25),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.asset(
-                          'assets/icon.png',
-                          width: 40,
-                          height: 40,
-                          fit: BoxFit.cover,
+                      // Logo
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withAlpha(25),
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Title
-                    Text(
-                      _needsInit ? '初始化面板' : '欢迎回来',
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _needsInit
-                          ? '首次使用，请创建管理员账号。'
-                          : '登录 Daidai Panel 管理您的服务器与任务。',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Server selector
-                    if (_panels.isNotEmpty && !_needsInit) ...[
-                      _FieldLabel('服务器'),
-                      const SizedBox(height: 6),
-                      _IconInput(
-                        icon: Icons.dns_outlined,
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _currentUrl,
-                            isExpanded: true,
-                            isDense: false,
-                            icon: Icon(
-                              Icons.expand_more,
-                              size: 20,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                            items: _panels.map((p) {
-                              return DropdownMenuItem(
-                                value: p.url,
-                                child: Text(
-                                  '${p.name.isNotEmpty ? p.name : "面板"} (${_shortUrl(p.url)})',
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (url) {
-                              final panel = _panels
-                                  .where((p) => p.url == url)
-                                  .first;
-                              _switchPanel(panel);
-                            },
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.asset(
+                            'assets/icon.png',
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
-                    ],
+                      const SizedBox(height: 20),
 
-                    // Username
-                    _FieldLabel('用户名'),
-                    const SizedBox(height: 6),
-                    _IconInput(
-                      icon: Icons.person_outline,
-                      child: TextFormField(
-                        controller: _usernameController,
-                        decoration: const InputDecoration(
-                          hintText: 'admin',
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                          isDense: true,
+                      // Title
+                      Text(
+                        _needsInit ? '初始化面板' : '欢迎回来',
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
                         ),
-                        textAlignVertical: TextAlignVertical.center,
-                        textInputAction: TextInputAction.next,
-                        validator: (v) =>
-                            v == null || v.trim().isEmpty ? '请输入用户名' : null,
                       ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Password
-                    _FieldLabel('密码'),
-                    const SizedBox(height: 6),
-                    _IconInput(
-                      icon: Icons.lock_outline,
-                      suffix: GestureDetector(
-                        onTap: () => setState(
-                          () => _obscurePassword = !_obscurePassword,
-                        ),
-                        child: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                          size: 20,
+                      const SizedBox(height: 6),
+                      Text(
+                        _needsInit
+                            ? '首次使用，请创建管理员账号。'
+                            : '登录 Daidai Panel 管理您的服务器与任务。',
+                        style: TextStyle(
+                          fontSize: 13,
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
-                      child: TextFormField(
-                        controller: _passwordController,
-                        decoration: const InputDecoration(
-                          hintText: '••••••••',
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                          isDense: true,
-                        ),
-                        textAlignVertical: TextAlignVertical.center,
-                        obscureText: _obscurePassword,
-                        textInputAction: _needsTotp
-                            ? TextInputAction.next
-                            : TextInputAction.go,
-                        onFieldSubmitted: _needsTotp ? null : (_) => _submit(),
-                        validator: (v) =>
-                            v == null || v.isEmpty ? '请输入密码' : null,
-                      ),
-                    ),
+                      const SizedBox(height: 32),
 
-                    // TOTP
-                    if (_needsTotp) ...[
-                      const SizedBox(height: 16),
-                      _FieldLabel('两步验证码'),
-                      const SizedBox(height: 6),
-                      _IconInput(
-                        icon: Icons.security,
-                        suffix: SizedBox(
-                          width: 40,
-                          child: Text(
-                            '${_totpController.text.trim().length}/6',
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: theme.colorScheme.onSurfaceVariant,
+                      // Server selector
+                      if (_panels.isNotEmpty && !_needsInit) ...[
+                        _FieldLabel('服务器'),
+                        const SizedBox(height: 6),
+                        _IconInput(
+                          icon: Icons.dns_outlined,
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: _currentUrl,
+                              isExpanded: true,
+                              isDense: false,
+                              icon: Icon(
+                                Icons.expand_more,
+                                size: 20,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                              items: _panels.map((p) {
+                                return DropdownMenuItem(
+                                  value: p.url,
+                                  child: Text(
+                                    '${p.name.isNotEmpty ? p.name : "面板"} (${_shortUrl(p.url)})',
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (url) {
+                                final panel = _panels
+                                    .where((p) => p.url == url)
+                                    .first;
+                                _switchPanel(panel);
+                              },
                             ),
                           ),
                         ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Username
+                      _FieldLabel('用户名'),
+                      const SizedBox(height: 6),
+                      _IconInput(
+                        icon: Icons.person_outline,
                         child: TextFormField(
-                          controller: _totpController,
+                          controller: _usernameController,
                           decoration: const InputDecoration(
-                            hintText: '6位数字验证码',
+                            hintText: 'admin',
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
                             focusedBorder: InputBorder.none,
@@ -431,135 +353,214 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             isDense: true,
                           ),
                           textAlignVertical: TextAlignVertical.center,
-                          keyboardType: TextInputType.number,
-                          maxLength: 6,
-                          buildCounter:
-                              (
-                                BuildContext context, {
-                                required int currentLength,
-                                required bool isFocused,
-                                required int? maxLength,
-                              }) => null,
-                          textInputAction: TextInputAction.go,
-                          onChanged: (_) => setState(() {}),
-                          onFieldSubmitted: (_) => _submit(),
-                          validator: (v) {
-                            if (v == null || v.trim().isEmpty) return '请输入验证码';
-                            if (v.trim().length != 6) return '验证码为6位数字';
-                            return null;
-                          },
+                          textInputAction: TextInputAction.next,
+                          validator: (v) =>
+                              v == null || v.trim().isEmpty ? '请输入用户名' : null,
                         ),
                       ),
-                    ],
+                      const SizedBox(height: 16),
 
-                    // Remember + AutoLogin
-                    const SizedBox(height: 8),
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 16,
-                      runSpacing: 8,
-                      children: [
-                        _CompactCheck(
-                          value: _rememberPassword,
-                          label: '记住密码',
-                          onChanged: (v) {
-                            setState(() {
-                              _rememberPassword = v;
-                              if (!v) _autoLogin = false;
-                            });
-                          },
+                      // Password
+                      _FieldLabel('密码'),
+                      const SizedBox(height: 6),
+                      _IconInput(
+                        icon: Icons.lock_outline,
+                        suffix: GestureDetector(
+                          onTap: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
+                          child: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            size: 20,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
-                        const SizedBox(width: 16),
-                        _CompactCheck(
-                          value: _autoLogin,
-                          label: '自动登录',
-                          enabled: _rememberPassword,
-                          onChanged: (v) => setState(() => _autoLogin = v),
+                        child: TextFormField(
+                          controller: _passwordController,
+                          decoration: const InputDecoration(
+                            hintText: '••••••••',
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            contentPadding: EdgeInsets.zero,
+                            isDense: true,
+                          ),
+                          textAlignVertical: TextAlignVertical.center,
+                          obscureText: _obscurePassword,
+                          textInputAction: _needsTotp
+                              ? TextInputAction.next
+                              : TextInputAction.go,
+                          onFieldSubmitted: _needsTotp
+                              ? null
+                              : (_) => _submit(),
+                          validator: (v) =>
+                              v == null || v.isEmpty ? '请输入密码' : null,
+                        ),
+                      ),
+
+                      // TOTP
+                      if (_needsTotp) ...[
+                        const SizedBox(height: 16),
+                        _FieldLabel('两步验证码'),
+                        const SizedBox(height: 6),
+                        _IconInput(
+                          icon: Icons.security,
+                          suffix: SizedBox(
+                            width: 40,
+                            child: Text(
+                              '${_totpController.text.trim().length}/6',
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          child: TextFormField(
+                            controller: _totpController,
+                            decoration: const InputDecoration(
+                              hintText: '6位数字验证码',
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                              isDense: true,
+                            ),
+                            textAlignVertical: TextAlignVertical.center,
+                            keyboardType: TextInputType.number,
+                            maxLength: 6,
+                            buildCounter:
+                                (
+                                  BuildContext context, {
+                                  required int currentLength,
+                                  required bool isFocused,
+                                  required int? maxLength,
+                                }) => null,
+                            textInputAction: TextInputAction.go,
+                            onChanged: (_) => setState(() {}),
+                            onFieldSubmitted: (_) => _submit(),
+                            validator: (v) {
+                              if (v == null || v.trim().isEmpty) {
+                                return '请输入验证码';
+                              }
+                              if (v.trim().length != 6) return '验证码为6位数字';
+                              return null;
+                            },
+                          ),
                         ),
                       ],
-                    ),
 
-                    // Error
-                    if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      Container(
+                      // Remember + AutoLogin
+                      const SizedBox(height: 8),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 16,
+                        runSpacing: 8,
+                        children: [
+                          _CompactCheck(
+                            value: _rememberPassword,
+                            label: '记住密码',
+                            onChanged: (v) {
+                              setState(() {
+                                _rememberPassword = v;
+                                if (!v) _autoLogin = false;
+                              });
+                            },
+                          ),
+                          const SizedBox(width: 16),
+                          _CompactCheck(
+                            value: _autoLogin,
+                            label: '自动登录',
+                            enabled: _rememberPassword,
+                            onChanged: (v) => setState(() => _autoLogin = v),
+                          ),
+                        ],
+                      ),
+
+                      // Error
+                      if (_error != null) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.red500.withAlpha(15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppColors.red500.withAlpha(40),
+                            ),
+                          ),
+                          child: Text(
+                            _error!,
+                            style: const TextStyle(
+                              color: AppColors.red500,
+                              fontSize: 13,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+
+                      // Login Button
+                      const SizedBox(height: 24),
+                      SizedBox(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.red500.withAlpha(15),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: AppColors.red500.withAlpha(40),
+                        height: 52,
+                        child: FilledButton(
+                          onPressed: _loading ? null : _submit,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 4,
+                            shadowColor: AppColors.primary.withAlpha(80),
                           ),
-                        ),
-                        child: Text(
-                          _error!,
-                          style: const TextStyle(
-                            color: AppColors.red500,
-                            fontSize: 13,
-                          ),
-                          textAlign: TextAlign.center,
+                          child: _loading
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text(
+                                  _needsInit ? '创建并登录' : '连接并登录',
+                                  style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                         ),
                       ),
-                    ],
 
-                    // Login Button
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: FilledButton(
-                        onPressed: _loading ? null : _submit,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 4,
-                          shadowColor: AppColors.primary.withAlpha(80),
-                        ),
-                        child: _loading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Text(
-                                _needsInit ? '创建并登录' : '连接并登录',
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                      ),
-                    ),
-
-                    // Switch panel
-                    const SizedBox(height: 16),
-                    Center(
-                      child: TextButton.icon(
-                        onPressed: () => context.go('/server-config?manual=1'),
-                        icon: Icon(
-                          Icons.swap_horiz,
-                          size: 18,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                        label: Text(
-                          '管理面板',
-                          style: TextStyle(
+                      // Switch panel
+                      const SizedBox(height: 16),
+                      Center(
+                        child: TextButton.icon(
+                          onPressed: () =>
+                              context.go('/server-config?manual=1'),
+                          icon: Icon(
+                            Icons.swap_horiz,
+                            size: 18,
                             color: theme.colorScheme.onSurfaceVariant,
-                            fontSize: 13,
+                          ),
+                          label: Text(
+                            '管理面板',
+                            style: TextStyle(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
                       ),
-                    ),
                     ],
                   ),
                 ),

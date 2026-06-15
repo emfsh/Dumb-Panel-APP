@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/network/sse_client.dart';
@@ -11,6 +10,7 @@ import '../../../shared/models/python_runtime_info.dart';
 import '../../../shared/utils/api_utils.dart';
 import '../../../shared/utils/ansi_text.dart';
 import '../../../shared/utils/log_background.dart';
+import '../../../shared/utils/time_utils.dart';
 
 // ── Provider ──
 
@@ -313,7 +313,6 @@ class DepListPage extends ConsumerStatefulWidget {
 }
 
 class _DepListPageState extends ConsumerState<DepListPage> {
-  final DateFormat _dateFormat = DateFormat('yyyy/MM/dd HH:mm');
   final Set<int> _selectedIds = <int>{};
   Map<String, int> _counts = const {'nodejs': 0, 'python': 0, 'linux': 0};
   bool _countLoading = true;
@@ -1014,7 +1013,9 @@ class _DepListPageState extends ConsumerState<DepListPage> {
                           onChanged: state.runtimeLoading
                               ? null
                               : (value) {
-                                  if (value != null) _changePythonVersion(value);
+                                  if (value != null) {
+                                    _changePythonVersion(value);
+                                  }
                                 },
                         ),
                       ),
@@ -1318,7 +1319,7 @@ class _DepListPageState extends ConsumerState<DepListPage> {
                               subtitle:
                                   '${_typeLabel(dep.type)}'
                                   '${dep.type == 'python' && dep.pythonVersion.isNotEmpty ? ' ${dep.pythonVersion}' : ''}'
-                                  ' · ${_dateFormat.format(dep.createdAt.toLocal())}',
+                                  ' · ${formatTimeCn(dep.createdAt, short: true)}',
                               onSelected: (value) {
                                 setState(() {
                                   if (value) {

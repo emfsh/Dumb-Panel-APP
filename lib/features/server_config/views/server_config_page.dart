@@ -169,7 +169,7 @@ class _ServerConfigPageState extends ConsumerState<ServerConfigPage> {
 
     if (!mounted) return;
     ref.read(authProvider.notifier).setUnauthenticated();
-    context.go(skipAutoLogin ? '/login?manual=1' : '/login');
+    context.go(skipAutoLogin ? '/login?manual=1' : '/boot');
   }
 
   Future<void> _connect({String? url, bool skipAutoLogin = true}) async {
@@ -205,9 +205,7 @@ class _ServerConfigPageState extends ConsumerState<ServerConfigPage> {
         context: context,
         builder: (dialogCtx) => AlertDialog(
           title: const Text('安全提示'),
-          content: const Text(
-            '当前使用 HTTP 连接，数据传输未加密。\n建议仅在可信网络中使用，确认继续？',
-          ),
+          content: const Text('当前使用 HTTP 连接，数据传输未加密。\n建议仅在可信网络中使用，确认继续？'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogCtx, false),

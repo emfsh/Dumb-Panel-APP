@@ -76,11 +76,7 @@ class _MorePageState extends ConsumerState<MorePage> {
     final theme = Theme.of(context);
     final isLight = theme.brightness == Brightness.light;
     final adminQuickActions = [
-      (
-        icon: Icons.code,
-        label: '脚本',
-        onTap: () => context.push('/scripts'),
-      ),
+      (icon: Icons.code, label: '脚本', onTap: () => context.push('/scripts')),
       (
         icon: Icons.sync,
         label: '订阅',
@@ -160,14 +156,24 @@ class _MorePageState extends ConsumerState<MorePage> {
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        Icon(Icons.link, size: 14, color: isLight ? AppColors.slate400 : AppColors.slate500),
+                        Icon(
+                          Icons.link,
+                          size: 14,
+                          color: isLight
+                              ? AppColors.slate400
+                              : AppColors.slate500,
+                        ),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            _serverUrl!.replaceAll('http://', '').replaceAll('https://', ''),
+                            _serverUrl!
+                                .replaceAll('http://', '')
+                                .replaceAll('https://', ''),
                             style: TextStyle(
                               fontSize: 12,
-                              color: isLight ? AppColors.slate500 : AppColors.slate400,
+                              color: isLight
+                                  ? AppColors.slate500
+                                  : AppColors.slate400,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -370,9 +376,11 @@ class _MorePageState extends ConsumerState<MorePage> {
             height: size,
             fit: BoxFit.cover,
             headers: {
-              'Authorization': 'Bearer ${DioClient.instance.dio.options.headers['Authorization']?.toString().replaceFirst('Bearer ', '') ?? ''}',
+              'Authorization':
+                  'Bearer ${DioClient.instance.dio.options.headers['Authorization']?.toString().replaceFirst('Bearer ', '') ?? ''}',
             },
-            errorBuilder: (_, __, ___) => _buildFallbackAvatar(user, size),
+            errorBuilder: (_, error, stackTrace) =>
+                _buildFallbackAvatar(user, size),
           ),
         ),
       );

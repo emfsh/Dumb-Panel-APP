@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../auth/auth_provider.dart';
+import '../../features/login/views/app_boot_page.dart';
 import '../../features/login/views/login_page.dart';
 import '../../features/server_config/views/server_config_page.dart';
 import '../../features/dashboard/views/dashboard_page.dart';
@@ -48,17 +49,25 @@ final routerProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
-    initialLocation: '/server-config',
+    initialLocation: '/boot',
     refreshListenable: refreshNotifier,
     redirect: (context, state) {
       // 每次 redirect 时实时读取最新状态（不用 watch）
       final authState = ref.read(authProvider);
       final isAuth = authState.status == AuthStatus.authenticated;
+      final isUnknown = authState.status == AuthStatus.unknown;
+      final isBootRoute = state.matchedLocation == '/boot';
       final isLoginRoute = state.matchedLocation == '/login';
       final isServerConfig = state.matchedLocation == '/server-config';
       final manualServerConfig = state.uri.queryParameters['manual'] == '1';
       final manageServerConfig = state.uri.queryParameters['manage'] == '1';
 
+      if (isBootRoute) {
+        return null;
+      }
+      if (isUnknown) {
+        return '/boot';
+      }
       if (isServerConfig) {
         if (isAuth && !manualServerConfig && !manageServerConfig) {
           return '/dashboard';
@@ -76,18 +85,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(path: '/boot', builder: (_, state) => const AppBootPage()),
       GoRoute(
         path: '/server-config',
         builder: (_, state) => ServerConfigPage(
           manageMode: state.uri.queryParameters['manage'] == '1',
         ),
       ),
-      GoRoute(
-        path: '/login',
-        builder: (_, state) => LoginPage(
-          skipAutoLogin: state.uri.queryParameters['manual'] == '1',
-        ),
-      ),
+      GoRoute(path: '/login', builder: (_, state) => const LoginPage()),
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
         builder: (_, state, child) => MainScaffold(child: child),

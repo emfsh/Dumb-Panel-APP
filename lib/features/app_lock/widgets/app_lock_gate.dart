@@ -151,7 +151,7 @@ class _AppLockOverlayState extends State<_AppLockOverlay> {
     final ok = await widget.controller.unlockWithPassword(
       _passwordController.text.trim(),
     );
-    final notice = widget.controller.state.unlockNotice;
+    final notice = widget.controller.getUnlockNotice();
     if (!mounted) return;
     setState(() {
       _submitting = false;
@@ -172,7 +172,7 @@ class _AppLockOverlayState extends State<_AppLockOverlay> {
       _error = null;
     });
     final ok = await widget.controller.unlockWithPattern(_patternPoints);
-    final notice = widget.controller.state.unlockNotice;
+    final notice = widget.controller.getUnlockNotice();
     if (!mounted) return;
     setState(() {
       _submitting = false;
@@ -189,7 +189,7 @@ class _AppLockOverlayState extends State<_AppLockOverlay> {
       _error = null;
     });
     final ok = await widget.controller.unlockWithBiometric();
-    final notice = widget.controller.state.unlockNotice;
+    final notice = widget.controller.getUnlockNotice();
     if (!mounted) return;
     setState(() {
       _submitting = false;

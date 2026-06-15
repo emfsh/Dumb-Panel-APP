@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/utils/api_utils.dart';
+import '../../../shared/utils/time_utils.dart';
 
 class _ApiScopeOption {
   final String value;
@@ -170,7 +170,7 @@ class _OpenApiPageState extends ConsumerState<OpenApiPage> {
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
                         itemCount: _apps.length,
                         itemBuilder: (_, i) =>
-                            _AppCard(app: _apps[i], isLight: isLight),
+                            _buildAppCard(app: _apps[i], isLight: isLight),
                       ),
               ),
             ),
@@ -190,108 +190,126 @@ class _OpenApiPageState extends ConsumerState<OpenApiPage> {
       showDragHandle: true,
       useRootNavigator: true,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            0,
-            20,
-            MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                '创建 API 应用',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameC,
-                decoration: const InputDecoration(labelText: '应用名称'),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                '权限范围',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _apiScopeOptions.map((option) {
-                  return FilterChip(
-                    label: Text(option.label),
-                    selected: selectedScopes.contains(option.value),
-                    onSelected: (selected) {
-                      setSheetState(() {
-                        if (selected) {
-                          selectedScopes.add(option.value);
-                        } else {
-                          selectedScopes.remove(option.value);
-                        }
-                      });
-                    },
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '留空表示该应用创建成功，但没有任何接口访问权限。',
-                style: TextStyle(fontSize: 11, color: AppColors.slate400),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: rateLimitC,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: '速率限制（次/小时）',
-                  hintText: '默认 100',
+        builder: (ctx, setSheetState) {
+          final navigator = Navigator.of(ctx);
+          final rootMessenger = ScaffoldMessenger.of(context);
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              0,
+              20,
+              MediaQuery.of(ctx).viewInsets.bottom + 20,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  '创建 API 应用',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                height: 44,
-                child: FilledButton(
-                  onPressed: () async {
-                    if (nameC.text.trim().isEmpty) {
-                      return;
-                    }
-                    try {
-                      final resp = await DioClient.instance.dio.post(
-                        ApiEndpoints.openApiApps,
-                        data: {
-                          'name': nameC.text.trim(),
-                          'scopes': _joinScopes(selectedScopes.toList()),
-                          'rate_limit':
-                              int.tryParse(rateLimitC.text.trim()) ?? 100,
-                        },
-                      );
-                      Navigator.of(ctx).pop();
-                      _load();
-                      final data = extractData(resp.data);
-                      if (data is Map && data['app_secret'] != null) {
-                        _showSecretDialog(
-                          data['app_key']?.toString() ?? '',
-                          data['app_secret'].toString(),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameC,
+                  decoration: const InputDecoration(labelText: '应用名称'),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  '权限范围',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _apiScopeOptions.map((option) {
+                    return FilterChip(
+                      label: Text(option.label),
+                      selected: selectedScopes.contains(option.value),
+                      onSelected: (selected) {
+                        setSheetState(() {
+                          if (selected) {
+                            selectedScopes.add(option.value);
+                          } else {
+                            selectedScopes.remove(option.value);
+                          }
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '留空表示该应用创建成功，但没有任何接口访问权限。',
+                  style: TextStyle(fontSize: 11, color: AppColors.slate400),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: rateLimitC,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: '速率限制（次/小时）',
+                    hintText: '默认 100',
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  height: 44,
+                  child: FilledButton(
+                    onPressed: () async {
+                      if (nameC.text.trim().isEmpty) {
+                        return;
+                      }
+                      try {
+                        final resp = await DioClient.instance.dio.post(
+                          ApiEndpoints.openApiApps,
+                          data: {
+                            'name': nameC.text.trim(),
+                            'scopes': _joinScopes(selectedScopes.toList()),
+                            'rate_limit':
+                                int.tryParse(rateLimitC.text.trim()) ?? 100,
+                          },
+                        );
+                        if (!mounted) {
+                          return;
+                        }
+                        navigator.pop();
+                        await _load();
+                        final data = extractData(resp.data);
+                        if (data is Map && data['app_secret'] != null) {
+                          _showSecretDialog(
+                            data['app_key']?.toString() ?? '',
+                            data['app_secret'].toString(),
+                          );
+                        }
+                      } catch (error) {
+                        if (!mounted) {
+                          return;
+                        }
+                        rootMessenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              extractErrorMessage(error, '创建 API 应用失败'),
+                            ),
+                          ),
                         );
                       }
-                    } catch (_) {}
-                  },
-                  child: const Text('创建'),
+                    },
+                    child: const Text('创建'),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 44,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('取消'),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('取消'),
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -330,7 +348,10 @@ class _OpenApiPageState extends ConsumerState<OpenApiPage> {
     );
   }
 
-  Widget _AppCard({required Map<String, dynamic> app, required bool isLight}) {
+  Widget _buildAppCard({
+    required Map<String, dynamic> app,
+    required bool isLight,
+  }) {
     final id = (app['id'] as num?)?.toInt() ?? 0;
     final name = app['name']?.toString() ?? '';
     final appKey = app['app_key']?.toString() ?? '';
@@ -500,12 +521,39 @@ class _OpenApiPageState extends ConsumerState<OpenApiPage> {
                         ),
                       );
                       if (confirm == true) {
-                        await DioClient.instance.dio.put(
-                          enabled
-                              ? ApiEndpoints.openApiAppDisable(id)
-                              : ApiEndpoints.openApiAppEnable(id),
-                        );
-                        _load();
+                        try {
+                          await DioClient.instance.dio.put(
+                            enabled
+                                ? ApiEndpoints.openApiAppDisable(id)
+                                : ApiEndpoints.openApiAppEnable(id),
+                          );
+                          if (!mounted) {
+                            return;
+                          }
+                          await _load();
+                          if (!mounted) {
+                            return;
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(enabled ? '应用已禁用' : '应用已启用'),
+                            ),
+                          );
+                        } catch (error) {
+                          if (!mounted) {
+                            return;
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                extractErrorMessage(
+                                  error,
+                                  enabled ? '禁用应用失败' : '启用应用失败',
+                                ),
+                              ),
+                            ),
+                          );
+                        }
                       }
                       break;
                     case 'reset':
@@ -520,7 +568,16 @@ class _OpenApiPageState extends ConsumerState<OpenApiPage> {
                             data['app_secret'].toString(),
                           );
                         }
-                      } catch (_) {}
+                      } catch (error) {
+                        if (!mounted) {
+                          return;
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(extractErrorMessage(error, '重置密钥失败')),
+                          ),
+                        );
+                      }
                       break;
                     case 'logs':
                       _showLogsDialog(id, name);
@@ -562,10 +619,32 @@ class _OpenApiPageState extends ConsumerState<OpenApiPage> {
                         ),
                       );
                       if (confirm == true) {
-                        await DioClient.instance.dio.delete(
-                          ApiEndpoints.openApiAppById(id),
-                        );
-                        _load();
+                        try {
+                          await DioClient.instance.dio.delete(
+                            ApiEndpoints.openApiAppById(id),
+                          );
+                          if (!mounted) {
+                            return;
+                          }
+                          await _load();
+                          if (!mounted) {
+                            return;
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('应用已删除')),
+                          );
+                        } catch (error) {
+                          if (!mounted) {
+                            return;
+                          }
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                extractErrorMessage(error, '删除应用失败'),
+                              ),
+                            ),
+                          );
+                        }
                       }
                       break;
                   }
@@ -597,93 +676,112 @@ class _OpenApiPageState extends ConsumerState<OpenApiPage> {
       showDragHandle: true,
       useRootNavigator: true,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            0,
-            20,
-            MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                '编辑应用',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameC,
-                decoration: const InputDecoration(labelText: '应用名称'),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                '权限范围',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _apiScopeOptions.map((option) {
-                  return FilterChip(
-                    label: Text(option.label),
-                    selected: selectedScopes.contains(option.value),
-                    onSelected: (selected) {
-                      setSheetState(() {
-                        if (selected) {
-                          selectedScopes.add(option.value);
-                        } else {
-                          selectedScopes.remove(option.value);
+        builder: (ctx, setSheetState) {
+          final navigator = Navigator.of(ctx);
+          final rootMessenger = ScaffoldMessenger.of(context);
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              0,
+              20,
+              MediaQuery.of(ctx).viewInsets.bottom + 20,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  '编辑应用',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameC,
+                  decoration: const InputDecoration(labelText: '应用名称'),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  '权限范围',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _apiScopeOptions.map((option) {
+                    return FilterChip(
+                      label: Text(option.label),
+                      selected: selectedScopes.contains(option.value),
+                      onSelected: (selected) {
+                        setSheetState(() {
+                          if (selected) {
+                            selectedScopes.add(option.value);
+                          } else {
+                            selectedScopes.remove(option.value);
+                          }
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: rateLimitC,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: '速率限制（次/小时）',
+                    hintText: '0 表示不限制',
+                  ),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  height: 44,
+                  child: FilledButton(
+                    onPressed: () async {
+                      try {
+                        await DioClient.instance.dio.put(
+                          ApiEndpoints.openApiAppById(id),
+                          data: {
+                            'name': nameC.text.trim(),
+                            'scopes': _joinScopes(selectedScopes.toList()),
+                            'rate_limit':
+                                int.tryParse(rateLimitC.text.trim()) ?? 0,
+                          },
+                        );
+                        if (!mounted) {
+                          return;
                         }
-                      });
+                        navigator.pop();
+                        await _load();
+                        rootMessenger.showSnackBar(
+                          const SnackBar(content: Text('应用已保存')),
+                        );
+                      } catch (error) {
+                        if (!mounted) {
+                          return;
+                        }
+                        rootMessenger.showSnackBar(
+                          SnackBar(
+                            content: Text(extractErrorMessage(error, '保存应用失败')),
+                          ),
+                        );
+                      }
                     },
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: rateLimitC,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: '速率限制（次/小时）',
-                  hintText: '0 表示不限制',
+                    child: const Text('保存'),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                height: 44,
-                child: FilledButton(
-                  onPressed: () async {
-                    try {
-                      await DioClient.instance.dio.put(
-                        ApiEndpoints.openApiAppById(id),
-                        data: {
-                          'name': nameC.text.trim(),
-                          'scopes': _joinScopes(selectedScopes.toList()),
-                          'rate_limit':
-                              int.tryParse(rateLimitC.text.trim()) ?? 0,
-                        },
-                      );
-                      Navigator.of(ctx).pop();
-                      _load();
-                    } catch (_) {}
-                  },
-                  child: const Text('保存'),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('取消'),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 44,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('取消'),
-                ),
-              ),
-            ],
-          ),
-        ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -734,18 +832,25 @@ class _OpenApiPageState extends ConsumerState<OpenApiPage> {
                           data: {'password': passwordC.text},
                         );
                         final data = extractData(resp.data);
-                        Navigator.pop(dialogCtx);
+                        if (!mounted) {
+                          return;
+                        }
+                        Navigator.of(dialogCtx).pop();
                         if (data is Map && data['app_secret'] != null) {
                           _showSecretDialog(
                             appKey,
                             data['app_secret'].toString(),
                           );
                         }
-                      } catch (_) {
+                      } catch (error) {
                         if (mounted) {
-                          ScaffoldMessenger.of(
-                            context,
-                          ).showSnackBar(const SnackBar(content: Text('密码错误')));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                extractErrorMessage(error, '查看密钥失败'),
+                              ),
+                            ),
+                          );
                         }
                       }
                     },
@@ -769,11 +874,15 @@ class _OpenApiPageState extends ConsumerState<OpenApiPage> {
       );
       final paginated = extractPaginated(resp.data);
       logs = paginated.items;
-    } catch (_) {}
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(extractErrorMessage(error, '加载调用日志失败'))),
+        );
+      }
+    }
 
     if (!mounted) return;
-    final fmt = DateFormat('MM-dd HH:mm:ss');
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -883,7 +992,7 @@ class _OpenApiPageState extends ConsumerState<OpenApiPage> {
                                 ),
                               ),
                               Text(
-                                time != null ? fmt.format(time.toLocal()) : '',
+                                formatTimeCn(time),
                                 style: const TextStyle(
                                   fontSize: 10,
                                   color: AppColors.slate400,
@@ -992,7 +1101,6 @@ class _OpenApiLogsPageState extends ConsumerState<OpenApiLogsPage> {
   @override
   Widget build(BuildContext context) {
     final isLight = Theme.of(context).brightness == Brightness.light;
-    final fmt = DateFormat('MM-dd HH:mm:ss');
 
     return Scaffold(
       body: Padding(
@@ -1133,9 +1241,7 @@ class _OpenApiLogsPageState extends ConsumerState<OpenApiLogsPage> {
                                   ),
                                 ),
                                 Text(
-                                  time != null
-                                      ? fmt.format(time.toLocal())
-                                      : '',
+                                  time != null ? formatTimeCn(time) : '',
                                   style: TextStyle(
                                     fontSize: 10,
                                     color: isLight

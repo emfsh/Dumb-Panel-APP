@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/network/sse_client.dart';
@@ -12,6 +11,7 @@ import '../../../shared/models/subscription.dart';
 import '../../../shared/utils/api_utils.dart';
 import '../../../shared/utils/ansi_text.dart';
 import '../../../shared/utils/log_background.dart';
+import '../../../shared/utils/time_utils.dart';
 
 // ── Provider ──
 
@@ -431,7 +431,22 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
       ),
     );
     if (confirm == true) {
-      await ref.read(subscriptionListProvider.notifier).delete(sub.id);
+      try {
+        await ref.read(subscriptionListProvider.notifier).delete(sub.id);
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('订阅已删除')));
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_extractRequestErrorMessage(error, '删除订阅失败'))),
+        );
+      }
     }
   }
 
@@ -456,6 +471,8 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
       showDragHandle: true,
       useRootNavigator: true,
       builder: (ctx) {
+        final navigator = Navigator.of(ctx);
+        final rootMessenger = ScaffoldMessenger.of(context);
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
             final theme = Theme.of(ctx);
@@ -658,26 +675,48 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                             width: double.infinity,
                             height: 44,
                             child: FilledButton(
-                              onPressed: () {
+                              onPressed: () async {
                                 if (nameC.text.trim().isEmpty) return;
-                                ref
-                                    .read(subscriptionListProvider.notifier)
-                                    .create({
-                                      'name': nameC.text.trim(),
-                                      'type': selectedType,
-                                      'url': urlC.text.trim(),
-                                      'branch': branchC.text.trim(),
-                                      'sub_path': subPathC.text.trim(),
-                                      'schedule': scheduleC.text.trim(),
-                                      'save_dir': saveDirC.text.trim(),
-                                      'alias': aliasC.text.trim(),
-                                      'whitelist': whitelistC.text.trim(),
-                                      'blacklist': blacklistC.text.trim(),
-                                      'depend_on': dependOnC.text.trim(),
-                                      'hook_script': hookScriptC.text.trim(),
-                                      'force_overwrite': forceOverwrite,
-                                    });
-                                Navigator.of(ctx).pop();
+                                try {
+                                  await ref
+                                      .read(subscriptionListProvider.notifier)
+                                      .create({
+                                        'name': nameC.text.trim(),
+                                        'type': selectedType,
+                                        'url': urlC.text.trim(),
+                                        'branch': branchC.text.trim(),
+                                        'sub_path': subPathC.text.trim(),
+                                        'schedule': scheduleC.text.trim(),
+                                        'save_dir': saveDirC.text.trim(),
+                                        'alias': aliasC.text.trim(),
+                                        'whitelist': whitelistC.text.trim(),
+                                        'blacklist': blacklistC.text.trim(),
+                                        'depend_on': dependOnC.text.trim(),
+                                        'hook_script': hookScriptC.text.trim(),
+                                        'force_overwrite': forceOverwrite,
+                                      });
+                                  if (!mounted) {
+                                    return;
+                                  }
+                                  navigator.pop();
+                                  rootMessenger.showSnackBar(
+                                    const SnackBar(content: Text('订阅已创建')),
+                                  );
+                                } catch (error) {
+                                  if (!mounted) {
+                                    return;
+                                  }
+                                  rootMessenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        _extractRequestErrorMessage(
+                                          error,
+                                          '创建订阅失败',
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
                               },
                               child: const Text('创建'),
                             ),
@@ -725,6 +764,8 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
       showDragHandle: true,
       useRootNavigator: true,
       builder: (ctx) {
+        final navigator = Navigator.of(ctx);
+        final rootMessenger = ScaffoldMessenger.of(context);
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
             final theme = Theme.of(ctx);
@@ -935,25 +976,47 @@ class _SubscriptionListPageState extends ConsumerState<SubscriptionListPage> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: FilledButton(
-                              onPressed: () {
-                                ref
-                                    .read(subscriptionListProvider.notifier)
-                                    .update(sub.id, {
-                                      'name': nameC.text.trim(),
-                                      'type': selectedType,
-                                      'url': urlC.text.trim(),
-                                      'branch': branchC.text.trim(),
-                                      'sub_path': subPathC.text.trim(),
-                                      'schedule': scheduleC.text.trim(),
-                                      'save_dir': saveDirC.text.trim(),
-                                      'alias': aliasC.text.trim(),
-                                      'whitelist': whitelistC.text.trim(),
-                                      'blacklist': blacklistC.text.trim(),
-                                      'depend_on': dependOnC.text.trim(),
-                                      'hook_script': hookScriptC.text.trim(),
-                                      'force_overwrite': forceOverwrite,
-                                    });
-                                Navigator.of(ctx).pop();
+                              onPressed: () async {
+                                try {
+                                  await ref
+                                      .read(subscriptionListProvider.notifier)
+                                      .update(sub.id, {
+                                        'name': nameC.text.trim(),
+                                        'type': selectedType,
+                                        'url': urlC.text.trim(),
+                                        'branch': branchC.text.trim(),
+                                        'sub_path': subPathC.text.trim(),
+                                        'schedule': scheduleC.text.trim(),
+                                        'save_dir': saveDirC.text.trim(),
+                                        'alias': aliasC.text.trim(),
+                                        'whitelist': whitelistC.text.trim(),
+                                        'blacklist': blacklistC.text.trim(),
+                                        'depend_on': dependOnC.text.trim(),
+                                        'hook_script': hookScriptC.text.trim(),
+                                        'force_overwrite': forceOverwrite,
+                                      });
+                                  if (!mounted) {
+                                    return;
+                                  }
+                                  navigator.pop();
+                                  rootMessenger.showSnackBar(
+                                    const SnackBar(content: Text('订阅已保存')),
+                                  );
+                                } catch (error) {
+                                  if (!mounted) {
+                                    return;
+                                  }
+                                  rootMessenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        _extractRequestErrorMessage(
+                                          error,
+                                          '保存订阅失败',
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }
                               },
                               style: FilledButton.styleFrom(
                                 minimumSize: const Size(0, 44),
@@ -1020,8 +1083,6 @@ class _SubCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fmt = DateFormat('MM-dd HH:mm');
-
     return GestureDetector(
       onTap: onEdit,
       child: Container(
@@ -1127,7 +1188,7 @@ class _SubCard extends StatelessWidget {
                 children: [
                   Text(
                     sub.lastPullAt != null
-                        ? '上次拉取：${fmt.format(sub.lastPullAt!.toLocal())}'
+                        ? '上次拉取：${formatTimeCn(sub.lastPullAt, short: true)}'
                         : '尚未拉取',
                     style: TextStyle(
                       fontSize: 12,
@@ -1331,7 +1392,6 @@ class _SubscriptionLogsPageState extends ConsumerState<SubscriptionLogsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final fmt = DateFormat('MM-dd HH:mm:ss');
     final isLight = Theme.of(context).brightness == Brightness.light;
     final totalPages = ((_total + _pageSize - 1) ~/ _pageSize).clamp(
       1,
@@ -1453,9 +1513,7 @@ class _SubscriptionLogsPageState extends ConsumerState<SubscriptionLogsPage> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  time != null
-                                      ? fmt.format(time.toLocal())
-                                      : '',
+                                  time != null ? formatTimeCn(time) : '',
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: isLight

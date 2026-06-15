@@ -40,6 +40,34 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   AuthNotifier(this._authService) : super(const AuthState());
 
+  Future<void> restoreTrustedLocalSession() async {
+    // 启动时先恢复本地可信登录态，避免每次打开 APP 都重新打登录日志。
+    final token = await SecureStorage.getAccessToken();
+    final serverUrl = await SecureStorage.getServerUrl();
+    if (token == null ||
+        token.isEmpty ||
+        serverUrl == null ||
+        serverUrl.isEmpty) {
+      state = const AuthState(status: AuthStatus.unauthenticated);
+      return;
+    }
+
+    final trusted = await SecureStorage.hasValidTrustedLogin(
+      serverUrl: serverUrl,
+    );
+    if (!trusted) {
+      state = const AuthState(status: AuthStatus.unauthenticated);
+      return;
+    }
+
+    final user = await SecureStorage.getUser();
+    state = state.copyWith(
+      status: AuthStatus.authenticated,
+      user: user,
+      error: null,
+    );
+  }
+
   Future<void> restoreSession() async {
     final token = await SecureStorage.getAccessToken();
     if (token == null || token.isEmpty) {
@@ -68,6 +96,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
         user: user,
         error: null,
       );
+
+      final serverUrl = await SecureStorage.getServerUrl();
+      if (serverUrl != null && serverUrl.isNotEmpty) {
+        await SecureStorage.saveTrustedLoginSession(
+          serverUrl: serverUrl,
+          expiresAt: DateTime.now().toUtc().add(const Duration(days: 7)),
+        );
+      }
     } catch (_) {
       await SecureStorage.clearAuthSession();
       state = state.copyWith(
@@ -112,6 +148,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
         } else {
           final user = await _authService.getUser();
           state = state.copyWith(status: AuthStatus.authenticated, user: user);
+        }
+
+        final serverUrl = await SecureStorage.getServerUrl();
+        if (serverUrl != null && serverUrl.isNotEmpty) {
+          await SecureStorage.saveTrustedLoginSession(
+            serverUrl: serverUrl,
+            expiresAt: DateTime.now().toUtc().add(const Duration(days: 7)),
+          );
         }
       }
       return result;

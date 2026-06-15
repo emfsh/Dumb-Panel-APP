@@ -29,10 +29,8 @@ void main() async {
     ),
   );
 
-  // 恢复登录状态时必须向服务端校验，避免本地残留 token 误判为已登录。
-  if (serverUrl != null && serverUrl.isNotEmpty) {
-    await container.read(authProvider.notifier).checkAuthStatus();
-  }
+  // 启动时先恢复本地可信登录态，7 天内避免重复触发登录接口和登录日志。
+  await container.read(authProvider.notifier).restoreTrustedLocalSession();
 
   runApp(
     UncontrolledProviderScope(container: container, child: const DaidaiApp()),

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import '../../../core/auth/auth_provider.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/utils/api_utils.dart';
+import '../../../shared/utils/time_utils.dart';
 
 // ── Provider ──
 
@@ -138,8 +138,6 @@ class UserListPage extends ConsumerStatefulWidget {
 }
 
 class _UserListPageState extends ConsumerState<UserListPage> {
-  final DateFormat _dateFormat = DateFormat('yyyy/MM/dd HH:mm');
-
   @override
   void initState() {
     super.initState();
@@ -245,7 +243,6 @@ class _UserListPageState extends ConsumerState<UserListPage> {
                           user: state.items[i],
                           isLight: isLight,
                           currentUsername: currentUsername,
-                          dateFormat: _dateFormat,
                           ref: ref,
                           context: context,
                           showResetPw: _showResetPasswordDialog,
@@ -332,84 +329,111 @@ class _UserListPageState extends ConsumerState<UserListPage> {
       isScrollControlled: true,
       showDragHandle: true,
       useRootNavigator: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            0,
-            20,
-            MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                '新建用户',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: usernameC,
-                decoration: const InputDecoration(labelText: '用户名'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: passwordC,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: '密码'),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Text('角色  ', style: TextStyle(fontSize: 13)),
-                  ...['admin', 'operator', 'viewer'].map(
-                    (r) => Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(
-                          r == 'admin'
-                              ? '管理员'
-                              : r == 'operator'
-                              ? '操作员'
-                              : '观察者',
-                          style: const TextStyle(fontSize: 12),
+      builder: (ctx) {
+        final navigator = Navigator.of(ctx);
+        final rootMessenger = ScaffoldMessenger.of(context);
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) => Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              0,
+              20,
+              MediaQuery.of(ctx).viewInsets.bottom + 20,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  '新建用户',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: usernameC,
+                  decoration: const InputDecoration(labelText: '用户名'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: passwordC,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: '密码'),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Text('角色  ', style: TextStyle(fontSize: 13)),
+                    ...['admin', 'operator', 'viewer'].map(
+                      (r) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(
+                            r == 'admin'
+                                ? '管理员'
+                                : r == 'operator'
+                                ? '操作员'
+                                : '观察者',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          selected: role == r,
+                          onSelected: (_) => setSheetState(() => role = r),
+                          visualDensity: VisualDensity.compact,
                         ),
-                        selected: role == r,
-                        onSelected: (_) => setSheetState(() => role = r),
-                        visualDensity: VisualDensity.compact,
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  height: 44,
+                  child: FilledButton(
+                    onPressed: () async {
+                      if (usernameC.text.trim().isEmpty ||
+                          passwordC.text.isEmpty) {
+                        return;
+                      }
+                      try {
+                        await ref
+                            .read(userListProvider.notifier)
+                            .create(
+                              usernameC.text.trim(),
+                              passwordC.text,
+                              role,
+                            );
+                        if (!mounted) {
+                          return;
+                        }
+                        navigator.pop();
+                        rootMessenger.showSnackBar(
+                          const SnackBar(content: Text('用户已创建')),
+                        );
+                      } catch (error) {
+                        if (!mounted) {
+                          return;
+                        }
+                        rootMessenger.showSnackBar(
+                          SnackBar(
+                            content: Text(extractErrorMessage(error, '创建用户失败')),
+                          ),
+                        );
+                      }
+                    },
+                    child: const Text('创建'),
                   ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                height: 44,
-                child: FilledButton(
-                  onPressed: () {
-                    if (usernameC.text.trim().isEmpty || passwordC.text.isEmpty)
-                      return;
-                    ref
-                        .read(userListProvider.notifier)
-                        .create(usernameC.text.trim(), passwordC.text, role);
-                    Navigator.of(ctx).pop();
-                  },
-                  child: const Text('创建'),
                 ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                height: 44,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('取消'),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('取消'),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -417,48 +441,67 @@ class _UserListPageState extends ConsumerState<UserListPage> {
     final passwordC = TextEditingController();
     showDialog(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
-        title: Text('重置 ${user.username} 的密码'),
-        content: TextField(
-          controller: passwordC,
-          obscureText: true,
-          decoration: const InputDecoration(labelText: '新密码'),
-        ),
-        actions: [
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(dialogCtx),
-                    child: const Text('取消'),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: FilledButton(
-                    onPressed: () {
-                      if (passwordC.text.isEmpty) return;
-                      ref
-                          .read(userListProvider.notifier)
-                          .resetPassword(user.id, passwordC.text);
-                      Navigator.pop(dialogCtx);
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(const SnackBar(content: Text('密码已重置')));
-                    },
-                    child: const Text('确认'),
-                  ),
-                ),
-              ),
-            ],
+      builder: (dialogCtx) {
+        final rootMessenger = ScaffoldMessenger.of(context);
+        return AlertDialog(
+          title: Text('重置 ${user.username} 的密码'),
+          content: TextField(
+            controller: passwordC,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: '新密码'),
           ),
-        ],
-      ),
+          actions: [
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(dialogCtx),
+                      child: const Text('取消'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SizedBox(
+                    height: 44,
+                    child: FilledButton(
+                      onPressed: () async {
+                        if (passwordC.text.isEmpty) return;
+                        try {
+                          await ref
+                              .read(userListProvider.notifier)
+                              .resetPassword(user.id, passwordC.text);
+                          if (!mounted) {
+                            return;
+                          }
+                          Navigator.of(dialogCtx).pop();
+                          rootMessenger.showSnackBar(
+                            const SnackBar(content: Text('密码已重置')),
+                          );
+                        } catch (error) {
+                          if (!mounted) {
+                            return;
+                          }
+                          rootMessenger.showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                extractErrorMessage(error, '重置密码失败'),
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text('确认'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -499,7 +542,22 @@ class _UserListPageState extends ConsumerState<UserListPage> {
       ),
     );
     if (confirm == true) {
-      await ref.read(userListProvider.notifier).delete(user.id);
+      try {
+        await ref.read(userListProvider.notifier).delete(user.id);
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('用户已删除')));
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(extractErrorMessage(error, '删除用户失败'))),
+        );
+      }
     }
   }
 }
@@ -508,7 +566,6 @@ class _UserCard extends StatelessWidget {
   final _User user;
   final bool isLight;
   final String? currentUsername;
-  final DateFormat dateFormat;
   final WidgetRef ref;
   final BuildContext context;
   final void Function(_User) showResetPw;
@@ -519,7 +576,6 @@ class _UserCard extends StatelessWidget {
     required this.user,
     required this.isLight,
     required this.currentUsername,
-    required this.dateFormat,
     required this.ref,
     required this.context,
     required this.showResetPw,
@@ -613,14 +669,14 @@ class _UserCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '最后登录: ${user.lastLoginAt != null ? dateFormat.format(user.lastLoginAt!.toLocal()) : '-'}',
+                  '最后登录: ${formatTimeCn(user.lastLoginAt)}',
                   style: TextStyle(
                     fontSize: 11,
                     color: isLight ? AppColors.slate500 : AppColors.slate400,
                   ),
                 ),
                 Text(
-                  '创建时间: ${dateFormat.format(user.createdAt.toLocal())}',
+                  '创建时间: ${formatTimeCn(user.createdAt)}',
                   style: TextStyle(
                     fontSize: 11,
                     color: isLight ? AppColors.slate500 : AppColors.slate400,
@@ -650,21 +706,43 @@ class _UserCard extends StatelessWidget {
                   child: Text('删除', style: TextStyle(color: AppColors.red500)),
                 ),
             ],
-            onSelected: (v) {
+            onSelected: (v) async {
               switch (v) {
                 case 'role':
-                  showRolePicker(user);
+                  await showRolePicker(user);
                   break;
                 case 'toggle':
-                  ref
-                      .read(userListProvider.notifier)
-                      .update(user.id, enabled: !user.enabled);
+                  try {
+                    await ref
+                        .read(userListProvider.notifier)
+                        .update(user.id, enabled: !user.enabled);
+                    if (!context.mounted) {
+                      return;
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(user.enabled ? '用户已禁用' : '用户已启用')),
+                    );
+                  } catch (error) {
+                    if (!context.mounted) {
+                      return;
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          extractErrorMessage(
+                            error,
+                            user.enabled ? '禁用用户失败' : '启用用户失败',
+                          ),
+                        ),
+                      ),
+                    );
+                  }
                   break;
                 case 'reset_pw':
                   showResetPw(user);
                   break;
                 case 'delete':
-                  showDelete(user);
+                  await showDelete(user);
                   break;
               }
             },

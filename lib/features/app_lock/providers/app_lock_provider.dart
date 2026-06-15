@@ -231,6 +231,11 @@ class AppLockController extends StateNotifier<AppLockState> {
     );
   }
 
+  String? getUnlockNotice() {
+    // 给 UI 读取最近一次验证提示，避免在 Widget 里直接访问 StateNotifier.state。
+    return state.unlockNotice;
+  }
+
   Future<bool> unlockWithPassword(String value) async {
     if (!state.hasPassword) {
       return false;
@@ -287,9 +292,7 @@ class AppLockController extends StateNotifier<AppLockState> {
       if (ok) {
         unlockSession();
       } else {
-        state = state.copyWith(
-          unlockNotice: '${state.biometricLabel}验证未通过',
-        );
+        state = state.copyWith(unlockNotice: '${state.biometricLabel}验证未通过');
       }
       return ok;
     } on PlatformException {
@@ -347,7 +350,11 @@ class AppLockController extends StateNotifier<AppLockState> {
       state = state.copyWith(unlockNotice: message);
       return message;
     }
-    state = state.copyWith(failedAttempts: 0, lockedUntil: null, unlockNotice: null);
+    state = state.copyWith(
+      failedAttempts: 0,
+      lockedUntil: null,
+      unlockNotice: null,
+    );
     return null;
   }
 
@@ -400,7 +407,8 @@ class AppLockController extends StateNotifier<AppLockState> {
     );
   }
 
-  bool _isLegacyHash(String value) => !value.startsWith('$_kAppLockHashVersion:');
+  bool _isLegacyHash(String value) =>
+      !value.startsWith('$_kAppLockHashVersion:');
 
   Future<bool> _matchesSecret(String value, String storedHash) async {
     if (_isLegacyHash(storedHash)) {
@@ -448,9 +456,7 @@ class AppLockController extends StateNotifier<AppLockState> {
         await Future<void>.delayed(Duration.zero);
       }
     }
-    return current
-        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
-        .join();
+    return current.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
   }
 }
 

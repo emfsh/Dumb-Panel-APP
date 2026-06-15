@@ -6,12 +6,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/network/api_endpoints.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/utils/api_utils.dart';
+import '../../../shared/utils/time_utils.dart';
 
 class BackupPage extends ConsumerStatefulWidget {
   const BackupPage({super.key});
@@ -242,7 +242,6 @@ class _CreateBackupRequest {
 }
 
 class _BackupPageState extends ConsumerState<BackupPage> {
-  final DateFormat _dateFormat = DateFormat('yyyy/MM/dd HH:mm:ss');
   List<_BackupFileRecord> _backups = const [];
   bool _loading = true;
   bool _creating = false;
@@ -787,7 +786,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
     if (value == null) {
       return '未知时间';
     }
-    return _dateFormat.format(value.toLocal());
+    return formatTimeCn(value);
   }
 
   String _restoreSourceLabel(String source) {

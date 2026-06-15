@@ -71,6 +71,8 @@ class SecureStorage {
 
   static const _accessTokenKey = 'access_token';
   static const _refreshTokenKey = 'refresh_token';
+  static const _trustedLoginUntilKey = 'trusted_login_until';
+  static const _trustedLoginServerUrlKey = 'trusted_login_server_url';
   static const _serverUrlKey = 'server_url';
   static const _serverListKey = 'server_list';
   static const _panelsKey = 'panels_config';
@@ -101,6 +103,53 @@ class SecureStorage {
     await _storage.delete(key: _refreshTokenKey);
   }
 
+  static Future<void> saveTrustedLoginSession({
+    required String serverUrl,
+    required DateTime expiresAt,
+  }) async {
+    // 保存当前面板的本地可信登录有效期，7 天内启动不再重复走登录接口。
+    await _storage.write(
+      key: _trustedLoginUntilKey,
+      value: expiresAt.toUtc().toIso8601String(),
+    );
+    await _storage.write(key: _trustedLoginServerUrlKey, value: serverUrl);
+  }
+
+  static Future<DateTime?> getTrustedLoginUntil() async {
+    final raw = await _storage.read(key: _trustedLoginUntilKey);
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+
+    try {
+      return DateTime.parse(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<String?> getTrustedLoginServerUrl() =>
+      _storage.read(key: _trustedLoginServerUrlKey);
+
+  static Future<bool> hasValidTrustedLogin({required String serverUrl}) async {
+    final trustedServerUrl = await getTrustedLoginServerUrl();
+    if (trustedServerUrl == null || trustedServerUrl != serverUrl) {
+      return false;
+    }
+
+    final trustedUntil = await getTrustedLoginUntil();
+    if (trustedUntil == null) {
+      return false;
+    }
+
+    return DateTime.now().toUtc().isBefore(trustedUntil.toUtc());
+  }
+
+  static Future<void> clearTrustedLoginSession() async {
+    await _storage.delete(key: _trustedLoginUntilKey);
+    await _storage.delete(key: _trustedLoginServerUrlKey);
+  }
+
   static Future<void> saveUser(User user) =>
       _storage.write(key: _userKey, value: jsonEncode(user.toJson()));
 
@@ -128,6 +177,7 @@ class SecureStorage {
   static Future<void> clearAuthSession() async {
     await clearTokens();
     await clearUser();
+    await clearTrustedLoginSession();
   }
 
   static Future<void> saveAppLockConfig(Map<String, dynamic> config) =>
@@ -226,6 +276,23 @@ class SecureStorage {
     final panels = await getPanels();
     panels.removeWhere((p) => p.url == url);
     await savePanels(panels);
+  }
+
+  static Future<PanelConfig?> getCurrentPanel() async {
+    // 当前活跃面板由 server_url 决定，再回 panels 列表里取完整配置。
+    final currentUrl = await getServerUrl();
+    if (currentUrl == null || currentUrl.isEmpty) {
+      return null;
+    }
+
+    final panels = await getPanels();
+    for (final panel in panels) {
+      if (panel.url == currentUrl) {
+        return panel;
+      }
+    }
+
+    return null;
   }
 
   static Future<void> writeValue(String key, String value) =>

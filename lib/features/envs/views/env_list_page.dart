@@ -216,10 +216,10 @@ class EnvListNotifier extends StateNotifier<EnvListState> {
     await load();
   }
 
-  Future<void> sortEnvs(List<int> ids) async {
+  Future<void> sortEnvs(int sourceId, int? targetId) async {
     await DioClient.instance.dio.put(
       ApiEndpoints.envsSort,
-      data: {'ids': ids},
+      data: {'source_id': sourceId, 'target_id': targetId},
     );
     await load();
   }
@@ -247,6 +247,8 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
 
   bool _selectionMode = false;
   bool _sortMode = false;
+  int? _lastMovedSourceId;
+  int? _lastMovedTargetId;
 
   Widget _buildGroupAutocomplete({
     required TextEditingController controller,
@@ -258,27 +260,25 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
         if (keyword.isEmpty) {
           return options;
         }
-        return options.where(
-          (group) => group.toLowerCase().contains(keyword),
-        );
+        return options.where((group) => group.toLowerCase().contains(keyword));
       },
       onSelected: (value) => controller.text = value,
       fieldViewBuilder:
           (context, textEditingController, focusNode, onSubmitted) {
-        textEditingController.value = controller.value;
-        textEditingController.addListener(() {
-          controller.value = textEditingController.value;
-        });
-        return TextField(
-          controller: textEditingController,
-          focusNode: focusNode,
-          decoration: const InputDecoration(
-            labelText: '分组',
-            hintText: '可选已有分组或直接输入',
-          ),
-          onSubmitted: (_) => onSubmitted(),
-        );
-      },
+            textEditingController.value = controller.value;
+            textEditingController.addListener(() {
+              controller.value = textEditingController.value;
+            });
+            return TextField(
+              controller: textEditingController,
+              focusNode: focusNode,
+              decoration: const InputDecoration(
+                labelText: '分组',
+                hintText: '可选已有分组或直接输入',
+              ),
+              onSubmitted: (_) => onSubmitted(),
+            );
+          },
       optionsViewBuilder: (context, onSelected, autocompleteOptions) {
         final items = autocompleteOptions.toList(growable: false);
         if (items.isEmpty) {
@@ -290,10 +290,7 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
             elevation: 4,
             borderRadius: BorderRadius.circular(12),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxHeight: 220,
-                maxWidth: 280,
-              ),
+              constraints: const BoxConstraints(maxHeight: 220, maxWidth: 280),
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 shrinkWrap: true,
@@ -368,13 +365,6 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
       if (_selectedIds.isEmpty) {
         _selectionMode = false;
       }
-    });
-  }
-
-  void _enterSelectionModeWith(int id) {
-    setState(() {
-      _selectionMode = true;
-      _selectedIds.add(id);
     });
   }
 
@@ -605,9 +595,9 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                   child: SizedBox(
                     height: 44,
                     child: FilledButton(
-                      onPressed: () => Navigator.of(
-                        dialogCtx,
-                      ).pop(_normalizeGroups([controller.text, ...selectedGroups])),
+                      onPressed: () => Navigator.of(dialogCtx).pop(
+                        _normalizeGroups([controller.text, ...selectedGroups]),
+                      ),
                       child: const Text('确认'),
                     ),
                   ),
@@ -673,23 +663,45 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                           isLight: isLight,
                           onTap: () async {
                             if (_sortMode) {
-                              final ids = ref.read(envListProvider).envs.map((e) => e.id).toList();
                               try {
-                                await ref.read(envListProvider.notifier).sortEnvs(ids);
+                                if (_lastMovedSourceId != null) {
+                                  await ref
+                                      .read(envListProvider.notifier)
+                                      .sortEnvs(
+                                        _lastMovedSourceId!,
+                                        _lastMovedTargetId,
+                                      );
+                                }
                                 if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
+                                  final messenger = ScaffoldMessenger.of(
+                                    context,
+                                  );
+                                  messenger.showSnackBar(
                                     const SnackBar(content: Text('排序已保存')),
                                   );
                                 }
-                              } catch (_) {
+                              } catch (error) {
                                 if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('保存排序失败')),
+                                  final messenger = ScaffoldMessenger.of(
+                                    context,
+                                  );
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        extractErrorMessage(error, '保存排序失败'),
+                                      ),
+                                    ),
                                   );
                                 }
                               }
                             }
-                            setState(() => _sortMode = !_sortMode);
+                            setState(() {
+                              _sortMode = !_sortMode;
+                              if (!_sortMode) {
+                                _lastMovedSourceId = null;
+                                _lastMovedTargetId = null;
+                              }
+                            });
                           },
                         ),
                       ],
@@ -798,9 +810,12 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                             _setSelectionMode(false);
                           }
                           _debounce?.cancel();
-                          _debounce = Timer(const Duration(milliseconds: 300), () {
-                            ref.read(envListProvider.notifier).setKeyword(v);
-                          });
+                          _debounce = Timer(
+                            const Duration(milliseconds: 300),
+                            () {
+                              ref.read(envListProvider.notifier).setKeyword(v);
+                            },
+                          );
                         },
                       ),
                     ),
@@ -967,18 +982,34 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
-                    color: isLight ? AppColors.primary.withAlpha(12) : AppColors.primary.withAlpha(20),
+                    color: isLight
+                        ? AppColors.primary.withAlpha(12)
+                        : AppColors.primary.withAlpha(20),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: AppColors.primary.withAlpha(40)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.swap_vert, size: 16, color: AppColors.primary),
+                      const Icon(
+                        Icons.swap_vert,
+                        size: 16,
+                        color: AppColors.primary,
+                      ),
                       const SizedBox(width: 8),
                       const Expanded(
-                        child: Text('长按拖拽调整顺序，点击「完成」保存', style: TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w500)),
+                        child: Text(
+                          '长按拖拽调整顺序，点击「完成」保存',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -1026,32 +1057,84 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
                         itemCount: state.envs.length,
                         onReorder: (oldIndex, newIndex) {
-                          ref.read(envListProvider.notifier).reorderLocal(oldIndex, newIndex);
+                          final current = List<EnvVar>.from(state.envs);
+                          if (current.isEmpty || oldIndex >= current.length) {
+                            return;
+                          }
+                          final sourceEnv = current[oldIndex];
+                          final adjustedNewIndex = newIndex > oldIndex
+                              ? newIndex - 1
+                              : newIndex;
+                          int? targetId;
+                          if (adjustedNewIndex > 0 &&
+                              adjustedNewIndex - 1 < current.length) {
+                            final targetSourceIndex =
+                                adjustedNewIndex > oldIndex
+                                ? adjustedNewIndex
+                                : adjustedNewIndex - 1;
+                            if (targetSourceIndex >= 0 &&
+                                targetSourceIndex < current.length) {
+                              targetId = current[targetSourceIndex].id;
+                            }
+                          }
+                          ref
+                              .read(envListProvider.notifier)
+                              .reorderLocal(oldIndex, newIndex);
+                          setState(() {
+                            _lastMovedSourceId = sourceEnv.id;
+                            _lastMovedTargetId = targetId;
+                          });
                         },
                         itemBuilder: (_, i) {
                           final env = state.envs[i];
                           return Container(
                             key: ValueKey(env.id),
                             margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 14,
+                            ),
                             decoration: BoxDecoration(
-                              color: isLight ? Colors.white : AppColors.slate900,
+                              color: isLight
+                                  ? Colors.white
+                                  : AppColors.slate900,
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: isLight ? AppColors.slate200 : AppColors.slate800,
+                                color: isLight
+                                    ? AppColors.slate200
+                                    : AppColors.slate800,
                               ),
                             ),
                             child: Row(
                               children: [
-                                const Icon(Icons.drag_handle, size: 20, color: AppColors.slate400),
+                                const Icon(
+                                  Icons.drag_handle,
+                                  size: 20,
+                                  color: AppColors.slate400,
+                                ),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text(env.name, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                                      Text(
+                                        env.name,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
                                       if (env.remarks.isNotEmpty)
-                                        Text(env.remarks, style: TextStyle(fontSize: 12, color: AppColors.slate400), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                        Text(
+                                          env.remarks,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.slate400,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                     ],
                                   ),
                                 ),
@@ -1059,7 +1142,9 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                                   width: 8,
                                   height: 8,
                                   decoration: BoxDecoration(
-                                    color: env.enabled ? AppColors.primary : AppColors.slate300,
+                                    color: env.enabled
+                                        ? AppColors.primary
+                                        : AppColors.slate300,
                                     shape: BoxShape.circle,
                                   ),
                                 ),
@@ -1276,20 +1361,38 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: FilledButton.icon(
-                      onPressed: () {
-                        ref
-                            .read(envListProvider.notifier)
-                            .update(
-                              env.id,
-                              nameC.text.trim(),
-                              valueC.text,
-                              remarks: remarksC.text.trim(),
-                              groups: _normalizeGroups([groupC.text]),
-                            );
-                        Navigator.of(ctx).pop();
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(const SnackBar(content: Text('已保存')));
+                      onPressed: () async {
+                        final rootMessenger = ScaffoldMessenger.of(context);
+                        try {
+                          await ref
+                              .read(envListProvider.notifier)
+                              .update(
+                                env.id,
+                                nameC.text.trim(),
+                                valueC.text,
+                                remarks: remarksC.text.trim(),
+                                groups: _normalizeGroups([groupC.text]),
+                              );
+                          if (!mounted) {
+                            return;
+                          }
+                          final navigator = Navigator.of(ctx);
+                          navigator.pop();
+                          rootMessenger.showSnackBar(
+                            const SnackBar(content: Text('已保存')),
+                          );
+                        } catch (error) {
+                          if (!mounted) {
+                            return;
+                          }
+                          rootMessenger.showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                extractErrorMessage(error, '保存环境变量失败'),
+                              ),
+                            ),
+                          );
+                        }
                       },
                       icon: const Icon(Icons.save, size: 16),
                       label: const Text('保存'),
@@ -1325,21 +1428,32 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
       showDragHandle: true,
       useRootNavigator: true,
       builder: (ctx) {
+        final navigator = Navigator.of(ctx);
+        final rootMessenger = ScaffoldMessenger.of(context);
         return Padding(
           padding: EdgeInsets.fromLTRB(
-            20, 0, 20, MediaQuery.of(ctx).viewInsets.bottom + 20,
+            20,
+            0,
+            20,
+            MediaQuery.of(ctx).viewInsets.bottom + 20,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('新建环境变量',
-                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              Text(
+                '新建环境变量',
+                style: Theme.of(
+                  ctx,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: nameC,
-                decoration: const InputDecoration(labelText: '变量名', hintText: '如 MY_TOKEN'),
+                decoration: const InputDecoration(
+                  labelText: '变量名',
+                  hintText: '如 MY_TOKEN',
+                ),
                 textInputAction: TextInputAction.next,
               ),
               const SizedBox(height: 12),
@@ -1371,15 +1485,34 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
               ),
               const SizedBox(height: 20),
               FilledButton(
-                onPressed: () {
+                onPressed: () async {
                   if (nameC.text.trim().isEmpty) return;
-                  ref.read(envListProvider.notifier).create(
-                    nameC.text.trim(),
-                    valueC.text,
-                    remarks: remarksC.text.trim(),
-                    groups: _normalizeGroups([groupC.text]),
-                  );
-                  Navigator.of(ctx).pop();
+                  try {
+                    await ref
+                        .read(envListProvider.notifier)
+                        .create(
+                          nameC.text.trim(),
+                          valueC.text,
+                          remarks: remarksC.text.trim(),
+                          groups: _normalizeGroups([groupC.text]),
+                        );
+                    if (!mounted) {
+                      return;
+                    }
+                    navigator.pop();
+                    rootMessenger.showSnackBar(
+                      const SnackBar(content: Text('环境变量已创建')),
+                    );
+                  } catch (error) {
+                    if (!mounted) {
+                      return;
+                    }
+                    rootMessenger.showSnackBar(
+                      SnackBar(
+                        content: Text(extractErrorMessage(error, '创建环境变量失败')),
+                      ),
+                    );
+                  }
                 },
                 style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
                 child: const Text('创建'),
@@ -1583,14 +1716,16 @@ class _EnvCard extends StatelessWidget {
                   ),
                 ),
                 if (!selectionMode) ...[
-                  _MiniBtn(icon: Icons.copy_outlined, isLight: isLight, onTap: onCopy),
+                  _MiniBtn(icon: Icons.copy_outlined, onTap: onCopy),
                   const SizedBox(width: 4),
                   GestureDetector(
                     onTap: onToggle,
                     child: Icon(
                       env.enabled ? Icons.toggle_on : Icons.toggle_off_outlined,
                       size: 32,
-                      color: env.enabled ? AppColors.primary : AppColors.slate400,
+                      color: env.enabled
+                          ? AppColors.primary
+                          : AppColors.slate400,
                     ),
                   ),
                 ],
@@ -1618,7 +1753,9 @@ class _EnvCard extends StatelessWidget {
                       env.remarks,
                       style: TextStyle(
                         fontSize: 10,
-                        color: isLight ? AppColors.slate400 : AppColors.slate500,
+                        color: isLight
+                            ? AppColors.slate400
+                            : AppColors.slate500,
                         fontStyle: FontStyle.italic,
                       ),
                       maxLines: 1,
@@ -1637,19 +1774,13 @@ class _EnvCard extends StatelessWidget {
 
 class _MiniBtn extends StatelessWidget {
   final IconData icon;
-  final bool isLight;
-  final Color? color;
   final VoidCallback onTap;
 
-  const _MiniBtn({
-    required this.icon,
-    required this.isLight,
-    this.color,
-    required this.onTap,
-  });
+  const _MiniBtn({required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1658,7 +1789,7 @@ class _MiniBtn extends StatelessWidget {
           color: isLight ? AppColors.slate50 : AppColors.slate800,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Icon(icon, size: 14, color: color ?? AppColors.slate400),
+        child: Icon(icon, size: 14, color: AppColors.slate400),
       ),
     );
   }

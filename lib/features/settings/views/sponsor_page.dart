@@ -5,6 +5,7 @@ import '../../../core/network/api_endpoints.dart';
 import '../../../core/network/dio_client.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/utils/api_utils.dart';
+import '../../../shared/utils/time_utils.dart';
 
 class SponsorPage extends StatefulWidget {
   const SponsorPage({super.key});
@@ -88,7 +89,7 @@ class _SponsorPageState extends State<SponsorPage> {
     final updatedAt = _updatedAt;
     final parsed = updatedAt == null ? null : DateTime.tryParse(updatedAt);
     if (parsed != null) {
-      parts.add('更新于 ${DateFormat('MM-dd HH:mm').format(parsed.toLocal())}');
+      parts.add('更新于 ${formatTimeCn(parsed, short: true)}');
     }
     return parts.join(' · ');
   }

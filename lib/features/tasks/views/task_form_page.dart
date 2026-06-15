@@ -352,10 +352,11 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
       await ref.read(taskProvider.notifier).load(refresh: true);
       if (mounted) context.pop();
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(extractErrorMessage(error, '保存失败'))),
         );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -497,8 +498,7 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
                   initialValue: _pythonVersion,
                   decoration: InputDecoration(
                     labelText: 'Python 版本',
-                    helperText:
-                        '仅 Python 脚本使用；新建任务默认跟随面板默认 Python 版本。',
+                    helperText: '仅 Python 脚本使用；新建任务默认跟随面板默认 Python 版本。',
                     suffixIcon: _loadingPythonRuntimes
                         ? const Padding(
                             padding: EdgeInsets.all(14),
@@ -549,9 +549,7 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
                           ),
                           onPressed: () {
                             final cur = _cronC.text.trim();
-                            _cronC.text = cur.isEmpty
-                                ? p.$2
-                                : '$cur\n${p.$2}';
+                            _cronC.text = cur.isEmpty ? p.$2 : '$cur\n${p.$2}';
                           },
                           visualDensity: VisualDensity.compact,
                         ),
@@ -666,7 +664,9 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
                       Expanded(
                         child: TextFormField(
                           controller: _retryIntervalC,
-                          decoration: const InputDecoration(labelText: '重试间隔(秒)'),
+                          decoration: const InputDecoration(
+                            labelText: '重试间隔(秒)',
+                          ),
                           keyboardType: TextInputType.number,
                         ),
                       ),
@@ -674,7 +674,9 @@ class _TaskFormPageState extends ConsumerState<TaskFormPage> {
                       Expanded(
                         child: TextFormField(
                           controller: _dependsOnC,
-                          decoration: const InputDecoration(labelText: '依赖任务ID'),
+                          decoration: const InputDecoration(
+                            labelText: '依赖任务ID',
+                          ),
                           keyboardType: TextInputType.number,
                         ),
                       ),
