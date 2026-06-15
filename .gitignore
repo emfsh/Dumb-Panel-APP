@@ -47,6 +47,9 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Local build artifacts
+/artifacts/
+
 # Android signing
 *.jks
 *.keystore
