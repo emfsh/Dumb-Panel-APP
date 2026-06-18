@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../shared/models/user.dart';
 import '../storage/secure_storage.dart';
@@ -192,6 +193,25 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   String _extractErrorMessage(dynamic e) {
+    if (e is DioException) {
+      final data = e.response?.data;
+      var backendMessage = '';
+      if (data is Map) {
+        backendMessage =
+            (data['error'] ?? data['message'])?.toString().trim() ?? '';
+      }
+
+      // NAS / Nginx Proxy Manager 反代旧面板时，登录接口可能因为 CORS 来源端口不一致返回 403。
+      if (e.response?.statusCode == 403) {
+        final extra = backendMessage.isEmpty ? '' : '\n后端提示：$backendMessage';
+        return '登录请求被面板拒绝（403）。如果你是在群晖、飞牛等 NAS 中使用 Nginx Proxy Manager 或公网域名反代访问，请优先升级面板到 v2.3.0 及以上；升级前可临时在 config.yaml 的 cors.origins 中加入完整公网地址，例如 https://域名:端口。$extra';
+      }
+
+      if (backendMessage.isNotEmpty) {
+        return backendMessage;
+      }
+    }
+
     if (e is Exception) {
       try {
         final dioError = e as dynamic;

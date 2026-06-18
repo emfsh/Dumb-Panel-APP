@@ -72,6 +72,17 @@ class AuthService {
         validateStatus: (status) => status != null && status < 500,
       ),
     );
+
+    // 登录接口只要返回 4xx，就先交给上层显示明确原因，避免后续误进入首页再变成“网络错误”。
+    final statusCode = response.statusCode ?? 0;
+    if (statusCode >= 400) {
+      throw DioException.badResponse(
+        statusCode: statusCode,
+        requestOptions: response.requestOptions,
+        response: response,
+      );
+    }
+
     final result = _extractData(response.data);
     final Map<String, dynamic> map = result is Map<String, dynamic>
         ? result
