@@ -40,6 +40,8 @@ const _taskStatusFilters = [
   _TaskStatusFilter('已禁用', '0'),
 ];
 
+enum _TaskBatchAction { run, enable, disable, delete }
+
 class _TaskListPageState extends ConsumerState<TaskListPage> {
   static const _collapsedGroupsStorageKey = 'tasks.collapsed_groups';
   static const _scrollOffsetStorageKey = 'tasks.scroll_offset';
@@ -48,9 +50,13 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
   final Set<String> _collapsedGroups = <String>{};
+  final Set<int> _selectedTaskIds = <int>{};
   final List<String> _knownGroups = <String>[];
   List<String> _groupOrder = <String>[];
   bool _groupReorderMode = false;
+  bool _selectionMode = false;
+  bool _taskSortMode = false;
+  bool _taskOrderDirty = false;
   Timer? _debounce;
   bool _restoredScrollOffset = false;
 
@@ -92,6 +98,161 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
 
   Future<void> _showActionError(dynamic error, String fallback) async {
     _showMessage(_extractTaskError(error, fallback));
+  }
+
+  bool _isAllTasksSelected(List<Task> tasks) =>
+      tasks.isNotEmpty &&
+      tasks.every((task) => _selectedTaskIds.contains(task.id));
+
+  void _setSelectionMode(bool enabled) {
+    setState(() {
+      _selectionMode = enabled;
+      if (!enabled) {
+        _selectedTaskIds.clear();
+      }
+    });
+  }
+
+  void _toggleTaskSelection(int id) {
+    setState(() {
+      _selectionMode = true;
+      if (_selectedTaskIds.contains(id)) {
+        _selectedTaskIds.remove(id);
+      } else {
+        _selectedTaskIds.add(id);
+      }
+      if (_selectedTaskIds.isEmpty) {
+        _selectionMode = false;
+      }
+    });
+  }
+
+  void _toggleSelectAllTasks(List<Task> tasks) {
+    final visibleIds = tasks.map((task) => task.id).toSet();
+    setState(() {
+      if (visibleIds.isNotEmpty &&
+          visibleIds.every((id) => _selectedTaskIds.contains(id))) {
+        _selectedTaskIds.removeAll(visibleIds);
+        if (_selectedTaskIds.isEmpty) {
+          _selectionMode = false;
+        }
+      } else {
+        _selectionMode = true;
+        _selectedTaskIds.addAll(visibleIds);
+      }
+    });
+  }
+
+  Future<bool> _confirmBatchTaskDelete(int count) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('批量删除任务'),
+        content: Text('确定要删除选中的 $count 个任务吗？此操作不可恢复。'),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                    child: const Text('取消'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: FilledButton(
+                    onPressed: () => Navigator.pop(dialogContext, true),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.red500,
+                    ),
+                    child: const Text('删除'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
+  Future<void> _performBatchTaskAction(_TaskBatchAction action) async {
+    final ids = _selectedTaskIds.toList()..sort();
+    if (ids.isEmpty) {
+      return;
+    }
+
+    if (action == _TaskBatchAction.run && ids.length > 10) {
+      _showMessage('批量运行最多选择 10 个任务');
+      return;
+    }
+
+    if (action == _TaskBatchAction.delete) {
+      final confirmed = await _confirmBatchTaskDelete(ids.length);
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    try {
+      final notifier = ref.read(taskProvider.notifier);
+      switch (action) {
+        case _TaskBatchAction.run:
+          await notifier.batchRun(ids);
+          break;
+        case _TaskBatchAction.enable:
+          await notifier.batchEnable(ids);
+          break;
+        case _TaskBatchAction.disable:
+          await notifier.batchDisable(ids);
+          break;
+        case _TaskBatchAction.delete:
+          await notifier.batchDelete(ids);
+          break;
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      _setSelectionMode(false);
+      final message = switch (action) {
+        _TaskBatchAction.run => '已批量运行 ${ids.length} 个任务',
+        _TaskBatchAction.enable => '已批量启用 ${ids.length} 个任务',
+        _TaskBatchAction.disable => '已批量禁用 ${ids.length} 个任务',
+        _TaskBatchAction.delete => '已批量删除 ${ids.length} 个任务',
+      };
+      _showMessage(message);
+    } catch (error) {
+      await _showActionError(error, '批量操作失败');
+    }
+  }
+
+  Future<void> _finishTaskSortMode(List<Task> tasks) async {
+    if (!_taskOrderDirty) {
+      setState(() => _taskSortMode = false);
+      return;
+    }
+
+    try {
+      await ref.read(taskProvider.notifier).saveTaskOrder(tasks);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _taskSortMode = false;
+        _taskOrderDirty = false;
+      });
+      _showMessage('任务排序已保存');
+    } catch (error) {
+      await _showActionError(error, '保存任务排序失败');
+    }
   }
 
   Future<void> _openLatestLog(Task task) async {
@@ -361,6 +522,8 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
     final isLight = theme.brightness == Brightness.light;
     _collectKnownGroups(state.tasks);
     final groupedTasks = _sortGroupsByOrder(_groupTasks(state.tasks));
+    final selectedCount = _selectedTaskIds.length;
+    final allSelected = _isAllTasksSelected(state.tasks);
     _restoreScrollOffsetIfNeeded();
 
     return Scaffold(
@@ -377,28 +540,61 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                     '定时任务',
                     style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
                   ),
-                  GestureDetector(
-                    onTap: () => context.push('/tasks/new'),
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withAlpha(80),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                  Row(
+                    children: [
+                      if (!_taskSortMode)
+                        _TaskHeaderChipButton(
+                          label: _selectionMode ? '取消' : '批量',
+                          icon: _selectionMode ? Icons.close : Icons.done_all,
+                          isLight: isLight,
+                          onTap: () => _setSelectionMode(!_selectionMode),
+                        ),
+                      if (!_selectionMode) ...[
+                        const SizedBox(width: 8),
+                        _TaskHeaderChipButton(
+                          label: _taskSortMode ? '完成' : '排序',
+                          icon: _taskSortMode ? Icons.check : Icons.swap_vert,
+                          isLight: isLight,
+                          onTap: () async {
+                            if (_taskSortMode) {
+                              await _finishTaskSortMode(state.tasks);
+                            } else {
+                              setState(() {
+                                _taskSortMode = true;
+                                _groupReorderMode = false;
+                                _taskOrderDirty = false;
+                              });
+                            }
+                          },
+                        ),
+                      ],
+                      if (!_selectionMode && !_taskSortMode) ...[
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () => context.push('/tasks/new'),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primary.withAlpha(80),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.add,
+                              size: 20,
+                              color: Colors.white,
+                            ),
                           ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.add,
-                        size: 20,
-                        color: Colors.white,
-                      ),
-                    ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
@@ -533,6 +729,100 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                 ],
               ),
             ),
+            if (_selectionMode) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _TaskBatchActionButton(
+                        label: allSelected ? '取消全选' : '全选',
+                        icon: allSelected ? Icons.deselect : Icons.select_all,
+                        color: AppColors.slate500,
+                        isLight: isLight,
+                        enabled: state.tasks.isNotEmpty,
+                        onTap: () => _toggleSelectAllTasks(state.tasks),
+                      ),
+                      const SizedBox(width: 8),
+                      _TaskBatchActionButton(
+                        label: '批量运行',
+                        icon: Icons.play_circle_outline,
+                        color: AppColors.primary,
+                        isLight: isLight,
+                        enabled: selectedCount > 0,
+                        onTap: () =>
+                            _performBatchTaskAction(_TaskBatchAction.run),
+                      ),
+                      const SizedBox(width: 8),
+                      _TaskBatchActionButton(
+                        label: '批量启用',
+                        icon: Icons.toggle_on_outlined,
+                        color: AppColors.primary,
+                        isLight: isLight,
+                        enabled: selectedCount > 0,
+                        onTap: () =>
+                            _performBatchTaskAction(_TaskBatchAction.enable),
+                      ),
+                      const SizedBox(width: 8),
+                      _TaskBatchActionButton(
+                        label: '批量禁用',
+                        icon: Icons.toggle_off_outlined,
+                        color: AppColors.slate500,
+                        isLight: isLight,
+                        enabled: selectedCount > 0,
+                        onTap: () =>
+                            _performBatchTaskAction(_TaskBatchAction.disable),
+                      ),
+                      const SizedBox(width: 8),
+                      _TaskBatchActionButton(
+                        label: '批量删除',
+                        icon: Icons.delete_outline,
+                        color: AppColors.red500,
+                        isLight: isLight,
+                        enabled: selectedCount > 0,
+                        onTap: () =>
+                            _performBatchTaskAction(_TaskBatchAction.delete),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+            if (_taskSortMode) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isLight
+                        ? AppColors.primary.withAlpha(12)
+                        : AppColors.primary.withAlpha(20),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.primary.withAlpha(40)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.swap_vert, size: 16, color: AppColors.primary),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '长按拖拽调整当前任务列表顺序，点击「完成」保存',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             Expanded(
               child: RefreshIndicator(
                 color: AppColors.primary,
@@ -555,6 +845,8 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
                         physics: const AlwaysScrollableScrollPhysics(),
                         children: [_buildEmpty()],
                       )
+                    : _taskSortMode
+                    ? _buildTaskReorderView(state.tasks, isLight)
                     : _groupReorderMode
                     ? _buildGroupReorderView(groupedTasks, isLight)
                     : ListView(
@@ -976,6 +1268,70 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
     );
   }
 
+  Widget _buildTaskReorderView(List<Task> tasks, bool isLight) {
+    return ReorderableListView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+      itemCount: tasks.length,
+      onReorder: (oldIndex, newIndex) {
+        // 只先调整本地顺序，等用户点击“完成”后再统一保存到后端，避免拖一下就请求多次。
+        ref.read(taskProvider.notifier).reorderLocalTasks(oldIndex, newIndex);
+        setState(() => _taskOrderDirty = true);
+      },
+      itemBuilder: (context, index) {
+        final task = tasks[index];
+        return Container(
+          key: ValueKey('task-sort-${task.id}'),
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            color: isLight ? Colors.white : AppColors.slate900,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isLight ? AppColors.slate200 : AppColors.slate800,
+            ),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.drag_handle,
+                size: 20,
+                color: AppColors.slate400,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      task.name,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      task.groupName?.isNotEmpty == true
+                          ? '分组：${task.groupName}'
+                          : '未分组',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.slate400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _MetaChip(label: task.statusText, active: !task.isDisabled),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildTaskGroup(_TaskGroup group, bool isLight) {
     final collapsed = _collapsedGroups.contains(group.key);
     final enabledCount = group.tasks.where((task) => task.isEnabled).length;
@@ -1076,7 +1432,16 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
             (task) => _TaskCard(
               task: task,
               isLight: isLight,
-              onTap: () => _openLatestLog(task),
+              selectionMode: _selectionMode,
+              selected: _selectedTaskIds.contains(task.id),
+              onTap: () => _selectionMode
+                  ? _toggleTaskSelection(task.id)
+                  : _openLatestLog(task),
+              onLongPress: () {
+                HapticFeedback.mediumImpact();
+                _toggleTaskSelection(task.id);
+              },
+              onSelectedChanged: () => _toggleTaskSelection(task.id),
               onRun: () => _runTask(task),
               onStop: () => _stopTask(task),
               onToggleEnabled: () => _toggleTaskEnabled(task),
@@ -1179,7 +1544,11 @@ class _TaskListPageState extends ConsumerState<TaskListPage> {
 class _TaskCard extends StatelessWidget {
   final Task task;
   final bool isLight;
+  final bool selectionMode;
+  final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
+  final VoidCallback onSelectedChanged;
   final VoidCallback onRun;
   final VoidCallback onStop;
   final VoidCallback onToggleEnabled;
@@ -1191,7 +1560,11 @@ class _TaskCard extends StatelessWidget {
   const _TaskCard({
     required this.task,
     required this.isLight,
+    required this.selectionMode,
+    required this.selected,
     required this.onTap,
+    required this.onLongPress,
+    required this.onSelectedChanged,
     required this.onRun,
     required this.onStop,
     required this.onToggleEnabled,
@@ -1378,15 +1751,19 @@ class _TaskCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      onLongPress: () => _showActionMenu(context),
-      child: Container(
+      onLongPress: onLongPress,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: isLight ? Colors.white : AppColors.slate900,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: hasFailure ? AppColors.red500.withAlpha(60) : borderColor,
+            color: selected
+                ? AppColors.primary
+                : (hasFailure ? AppColors.red500.withAlpha(60) : borderColor),
+            width: selected ? 1.4 : 1,
           ),
         ),
         child: Column(
@@ -1394,6 +1771,20 @@ class _TaskCard extends StatelessWidget {
           children: [
             Row(
               children: [
+                if (selectionMode) ...[
+                  SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: Checkbox(
+                      value: selected,
+                      onChanged: (_) => onSelectedChanged(),
+                      activeColor: AppColors.primary,
+                      visualDensity: VisualDensity.compact,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 Container(
                   width: 8,
                   height: 8,
@@ -1508,40 +1899,44 @@ class _TaskCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                _SmallIconBtn(
-                  icon: task.isRunning
-                      ? Icons.stop_rounded
-                      : Icons.play_arrow_rounded,
-                  onTap: task.isRunning ? onStop : onRun,
-                  color: task.isRunning ? AppColors.red500 : AppColors.primary,
-                ),
-                const SizedBox(width: 6),
-                _SmallIconBtn(
-                  icon: task.isDisabled
-                      ? Icons.toggle_on_outlined
-                      : Icons.toggle_off_outlined,
-                  onTap: onToggleEnabled,
-                  color: task.isDisabled
-                      ? AppColors.primary
-                      : AppColors.slate400,
-                ),
-                const SizedBox(width: 6),
-                _SmallIconBtn(
-                  icon: task.isPinned
-                      ? Icons.push_pin_outlined
-                      : Icons.push_pin,
-                  onTap: onTogglePinned,
-                  color: task.isPinned
-                      ? AppColors.amber500
-                      : AppColors.slate400,
-                ),
-                const SizedBox(width: 6),
-                _SmallIconBtn(icon: Icons.edit_outlined, onTap: onEdit),
-                const SizedBox(width: 6),
-                _SmallIconBtn(
-                  icon: Icons.more_horiz,
-                  onTap: () => _showActionMenu(context),
-                ),
+                if (!selectionMode) ...[
+                  _SmallIconBtn(
+                    icon: task.isRunning
+                        ? Icons.stop_rounded
+                        : Icons.play_arrow_rounded,
+                    onTap: task.isRunning ? onStop : onRun,
+                    color: task.isRunning
+                        ? AppColors.red500
+                        : AppColors.primary,
+                  ),
+                  const SizedBox(width: 6),
+                  _SmallIconBtn(
+                    icon: task.isDisabled
+                        ? Icons.toggle_on_outlined
+                        : Icons.toggle_off_outlined,
+                    onTap: onToggleEnabled,
+                    color: task.isDisabled
+                        ? AppColors.primary
+                        : AppColors.slate400,
+                  ),
+                  const SizedBox(width: 6),
+                  _SmallIconBtn(
+                    icon: task.isPinned
+                        ? Icons.push_pin_outlined
+                        : Icons.push_pin,
+                    onTap: onTogglePinned,
+                    color: task.isPinned
+                        ? AppColors.amber500
+                        : AppColors.slate400,
+                  ),
+                  const SizedBox(width: 6),
+                  _SmallIconBtn(icon: Icons.edit_outlined, onTap: onEdit),
+                  const SizedBox(width: 6),
+                  _SmallIconBtn(
+                    icon: Icons.more_horiz,
+                    onTap: () => _showActionMenu(context),
+                  ),
+                ],
               ],
             ),
           ],
@@ -1726,6 +2121,107 @@ class _SmallIconBtn extends StatelessWidget {
           border: Border.all(color: btnColor.withAlpha(isLight ? 40 : 50)),
         ),
         child: Icon(icon, size: 18, color: btnColor),
+      ),
+    );
+  }
+}
+
+class _TaskHeaderChipButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isLight;
+  final VoidCallback onTap;
+
+  const _TaskHeaderChipButton({
+    required this.label,
+    required this.icon,
+    required this.isLight,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: isLight ? Colors.white : AppColors.slate900,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: isLight ? AppColors.slate200 : AppColors.slate800,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: AppColors.slate400),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TaskBatchActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool isLight;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _TaskBatchActionButton({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.isLight,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final backgroundColor = enabled
+        ? (isLight ? color.withAlpha(18) : color.withAlpha(24))
+        : (isLight ? AppColors.slate50 : AppColors.slate800);
+    final borderColor = enabled
+        ? color.withAlpha(isLight ? 60 : 90)
+        : (isLight ? AppColors.slate200 : AppColors.slate700);
+    final foregroundColor = enabled ? color : AppColors.slate400;
+
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: borderColor),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: foregroundColor),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: foregroundColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -82,7 +82,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
   Widget _buildFallbackAvatar(AuthState auth, bool isLight, double size) {
     final username = auth.user?.username ?? '';
-    final initial = username.isNotEmpty ? username.substring(0, 1).toUpperCase() : '?';
+    final initial = username.isNotEmpty
+        ? username.substring(0, 1).toUpperCase()
+        : '?';
     return Container(
       width: size,
       height: size,
@@ -278,7 +280,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                           label: data.memoryUnavailable
                               ? '内存（资源采集不可用）'
                               : '内存 (${data.memoryUsed}/${data.memoryTotal})',
-                          value: data.memoryUnavailable ? null : data.memoryUsage,
+                          value: data.memoryUnavailable
+                              ? null
+                              : data.memoryUsage,
                           barColor: AppColors.primary,
                           valueText: data.memoryUnavailable
                               ? '不可用'
@@ -325,6 +329,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
                       disabled: data.disabledTasks,
                       todaySuccess: data.todaySuccess,
                       todayFailed: data.todayFailed,
+                      onTap: () => context.go('/tasks'),
                     ),
                     const SizedBox(height: 24),
                   ],

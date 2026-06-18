@@ -623,6 +623,88 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
     await ref.read(envListProvider.notifier).load();
   }
 
+  Future<void> _openValueFullScreenEditor(
+    TextEditingController controller, {
+    required String title,
+  }) async {
+    final editorC = TextEditingController(text: controller.text);
+    final result = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (pageContext) {
+          final isLight = Theme.of(pageContext).brightness == Brightness.light;
+          return Scaffold(
+            appBar: AppBar(
+              title: Text(title),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(pageContext).pop(editorC.text),
+                  child: const Text('完成'),
+                ),
+              ],
+            ),
+            body: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      '适合编辑账号较多、Token 很长或多行变量值。',
+                      style: TextStyle(fontSize: 12, color: AppColors.slate500),
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: editorC,
+                        autofocus: true,
+                        expands: true,
+                        maxLines: null,
+                        minLines: null,
+                        keyboardType: TextInputType.multiline,
+                        textAlignVertical: TextAlignVertical.top,
+                        decoration: InputDecoration(
+                          hintText: '在这里编辑完整变量值',
+                          alignLabelWithHint: true,
+                          filled: true,
+                          fillColor: isLight
+                              ? Colors.white
+                              : AppColors.slate900,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            bottomNavigationBar: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: FilledButton.icon(
+                  // 全屏编辑页只负责回填文本，真正保存仍由原来的“保存/创建”按钮执行。
+                  onPressed: () => Navigator.of(pageContext).pop(editorC.text),
+                  icon: const Icon(Icons.check, size: 18),
+                  label: const Text('完成并回填'),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    editorC.dispose();
+    if (result == null) {
+      return;
+    }
+    controller.text = result;
+    controller.selection = TextSelection.fromPosition(
+      TextPosition(offset: controller.text.length),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(envListProvider);
@@ -1316,7 +1398,16 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
               const SizedBox(height: 12),
               TextField(
                 controller: valueC,
-                decoration: const InputDecoration(labelText: '值'),
+                decoration: InputDecoration(
+                  labelText: '值',
+                  suffixIcon: IconButton(
+                    // 变量值较长时进入全屏编辑，避免在底部弹窗的小输入框里反复横向/纵向滚动。
+                    icon: const Icon(Icons.open_in_full, size: 18),
+                    tooltip: '全屏编辑变量值',
+                    onPressed: () =>
+                        _openValueFullScreenEditor(valueC, title: '编辑变量值'),
+                  ),
+                ),
                 maxLines: 4,
                 minLines: 2,
               ),
@@ -1459,7 +1550,16 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
               const SizedBox(height: 12),
               TextField(
                 controller: valueC,
-                decoration: const InputDecoration(labelText: '值'),
+                decoration: InputDecoration(
+                  labelText: '值',
+                  suffixIcon: IconButton(
+                    // 新建变量时也提供全屏编辑，账号很多时可以先大屏整理再创建。
+                    icon: const Icon(Icons.open_in_full, size: 18),
+                    tooltip: '全屏编辑变量值',
+                    onPressed: () =>
+                        _openValueFullScreenEditor(valueC, title: '新建变量值'),
+                  ),
+                ),
                 maxLines: 3,
                 minLines: 1,
                 textInputAction: TextInputAction.next,

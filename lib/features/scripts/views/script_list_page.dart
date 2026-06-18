@@ -798,108 +798,132 @@ class _ScriptListPageState extends ConsumerState<ScriptListPage> {
   Future<void> _handleEntryAction(ScriptFile file, ScriptState state) async {
     final action = await showModalBottomSheet<_ScriptEntryAction>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (!file.isDirectory)
-              ListTile(
-                leading: const Icon(Icons.open_in_new),
-                title: const Text('打开脚本'),
-                onTap: () =>
-                    Navigator.pop(sheetContext, _ScriptEntryAction.open),
+      builder: (sheetContext) {
+        // 菜单项较多时限制底部菜单高度，并允许上下滚动，避免“删除”入口被小屏幕截掉。
+        final maxSheetHeight = MediaQuery.sizeOf(sheetContext).height * 0.8;
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxSheetHeight),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!file.isDirectory)
+                    ListTile(
+                      leading: const Icon(Icons.open_in_new),
+                      title: const Text('打开脚本'),
+                      onTap: () =>
+                          Navigator.pop(sheetContext, _ScriptEntryAction.open),
+                    ),
+                  if (!file.isDirectory)
+                    ListTile(
+                      leading: const Icon(Icons.playlist_add_outlined),
+                      title: const Text('加入任务'),
+                      onTap: () => Navigator.pop(
+                        sheetContext,
+                        _ScriptEntryAction.addToTask,
+                      ),
+                    ),
+                  if (!file.isDirectory)
+                    ListTile(
+                      leading: const Icon(Icons.download_outlined),
+                      title: const Text('下载'),
+                      onTap: () => Navigator.pop(
+                        sheetContext,
+                        _ScriptEntryAction.download,
+                      ),
+                    ),
+                  if (!file.isDirectory)
+                    ListTile(
+                      leading: Icon(
+                        _favoriteScriptPaths.contains(file.path)
+                            ? Icons.push_pin_outlined
+                            : Icons.push_pin,
+                      ),
+                      title: Text(
+                        _favoriteScriptPaths.contains(file.path)
+                            ? '取消置顶'
+                            : '置顶到前面',
+                      ),
+                      onTap: () => Navigator.pop(
+                        sheetContext,
+                        _ScriptEntryAction.favorite,
+                      ),
+                    ),
+                  if (!file.isDirectory)
+                    ListTile(
+                      leading: const Icon(Icons.history_outlined),
+                      title: const Text('版本历史'),
+                      onTap: () => Navigator.pop(
+                        sheetContext,
+                        _ScriptEntryAction.versions,
+                      ),
+                    ),
+                  ListTile(
+                    leading: const Icon(Icons.drive_file_move_outline),
+                    title: Text(file.isDirectory ? '移动文件夹' : '移动文件'),
+                    onTap: () =>
+                        Navigator.pop(sheetContext, _ScriptEntryAction.move),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.copy_outlined),
+                    title: Text(file.isDirectory ? '复制文件夹' : '复制文件'),
+                    onTap: () =>
+                        Navigator.pop(sheetContext, _ScriptEntryAction.copy),
+                  ),
+                  if (file.isDirectory)
+                    ListTile(
+                      leading: const Icon(Icons.upload_file_outlined),
+                      title: const Text('上传到此处'),
+                      onTap: () => Navigator.pop(
+                        sheetContext,
+                        _ScriptEntryAction.uploadHere,
+                      ),
+                    ),
+                  if (file.isDirectory)
+                    ListTile(
+                      leading: const Icon(Icons.note_add_outlined),
+                      title: const Text('在此新建脚本'),
+                      onTap: () => Navigator.pop(
+                        sheetContext,
+                        _ScriptEntryAction.createFileHere,
+                      ),
+                    ),
+                  if (file.isDirectory)
+                    ListTile(
+                      leading: const Icon(Icons.create_new_folder_outlined),
+                      title: const Text('在此新建文件夹'),
+                      onTap: () => Navigator.pop(
+                        sheetContext,
+                        _ScriptEntryAction.createDirectoryHere,
+                      ),
+                    ),
+                  ListTile(
+                    leading: const Icon(Icons.drive_file_rename_outline),
+                    title: const Text('重命名'),
+                    onTap: () =>
+                        Navigator.pop(sheetContext, _ScriptEntryAction.rename),
+                  ),
+                  ListTile(
+                    leading: const Icon(
+                      Icons.delete_outline,
+                      color: AppColors.red500,
+                    ),
+                    title: const Text(
+                      '删除',
+                      style: TextStyle(color: AppColors.red500),
+                    ),
+                    onTap: () =>
+                        Navigator.pop(sheetContext, _ScriptEntryAction.delete),
+                  ),
+                ],
               ),
-            if (!file.isDirectory)
-              ListTile(
-                leading: const Icon(Icons.playlist_add_outlined),
-                title: const Text('加入任务'),
-                onTap: () =>
-                    Navigator.pop(sheetContext, _ScriptEntryAction.addToTask),
-              ),
-            if (!file.isDirectory)
-              ListTile(
-                leading: const Icon(Icons.download_outlined),
-                title: const Text('下载'),
-                onTap: () =>
-                    Navigator.pop(sheetContext, _ScriptEntryAction.download),
-              ),
-            if (!file.isDirectory)
-              ListTile(
-                leading: Icon(
-                  _favoriteScriptPaths.contains(file.path)
-                      ? Icons.push_pin_outlined
-                      : Icons.push_pin,
-                ),
-                title: Text(
-                  _favoriteScriptPaths.contains(file.path) ? '取消置顶' : '置顶到前面',
-                ),
-                onTap: () =>
-                    Navigator.pop(sheetContext, _ScriptEntryAction.favorite),
-              ),
-            if (!file.isDirectory)
-              ListTile(
-                leading: const Icon(Icons.history_outlined),
-                title: const Text('版本历史'),
-                onTap: () =>
-                    Navigator.pop(sheetContext, _ScriptEntryAction.versions),
-              ),
-            ListTile(
-              leading: const Icon(Icons.drive_file_move_outline),
-              title: Text(file.isDirectory ? '移动文件夹' : '移动文件'),
-              onTap: () => Navigator.pop(sheetContext, _ScriptEntryAction.move),
             ),
-            ListTile(
-              leading: const Icon(Icons.copy_outlined),
-              title: Text(file.isDirectory ? '复制文件夹' : '复制文件'),
-              onTap: () => Navigator.pop(sheetContext, _ScriptEntryAction.copy),
-            ),
-            if (file.isDirectory)
-              ListTile(
-                leading: const Icon(Icons.upload_file_outlined),
-                title: const Text('上传到此处'),
-                onTap: () =>
-                    Navigator.pop(sheetContext, _ScriptEntryAction.uploadHere),
-              ),
-            if (file.isDirectory)
-              ListTile(
-                leading: const Icon(Icons.note_add_outlined),
-                title: const Text('在此新建脚本'),
-                onTap: () => Navigator.pop(
-                  sheetContext,
-                  _ScriptEntryAction.createFileHere,
-                ),
-              ),
-            if (file.isDirectory)
-              ListTile(
-                leading: const Icon(Icons.create_new_folder_outlined),
-                title: const Text('在此新建文件夹'),
-                onTap: () => Navigator.pop(
-                  sheetContext,
-                  _ScriptEntryAction.createDirectoryHere,
-                ),
-              ),
-            ListTile(
-              leading: const Icon(Icons.drive_file_rename_outline),
-              title: const Text('重命名'),
-              onTap: () =>
-                  Navigator.pop(sheetContext, _ScriptEntryAction.rename),
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.delete_outline,
-                color: AppColors.red500,
-              ),
-              title: const Text(
-                '删除',
-                style: TextStyle(color: AppColors.red500),
-              ),
-              onTap: () =>
-                  Navigator.pop(sheetContext, _ScriptEntryAction.delete),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
 
     if (action == null) {

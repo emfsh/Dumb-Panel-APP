@@ -58,23 +58,30 @@ class LogListNotifier extends StateNotifier<LogListState> {
   LogListNotifier() : super(const LogListState());
   int _page = 1;
 
+  Map<String, dynamic> _currentQueryParams({
+    required int page,
+    int pageSize = 20,
+  }) {
+    final params = <String, dynamic>{'page': page, 'page_size': pageSize};
+    if (state.keyword.isNotEmpty) {
+      params['keyword'] = state.keyword;
+    }
+    if (state.taskIdFilter.isNotEmpty) {
+      params['task_id'] = state.taskIdFilter;
+    }
+    if (state.statusFilter != null) {
+      params['status'] = state.statusFilter;
+    }
+    return params;
+  }
+
   Future<void> load({bool refresh = false}) async {
     if (refresh) _page = 1;
     state = state.copyWith(loading: true);
     try {
-      final params = <String, dynamic>{'page': _page, 'page_size': 20};
-      if (state.keyword.isNotEmpty) {
-        params['keyword'] = state.keyword;
-      }
-      if (state.taskIdFilter.isNotEmpty) {
-        params['task_id'] = state.taskIdFilter;
-      }
-      if (state.statusFilter != null) {
-        params['status'] = state.statusFilter;
-      }
       final response = await DioClient.instance.dio.get(
         ApiEndpoints.logs,
-        queryParameters: params,
+        queryParameters: _currentQueryParams(page: _page),
       );
       final paginated = extractPaginated(response.data);
       final items = paginated.items.map((e) => TaskLog.fromJson(e)).toList();
@@ -123,6 +130,44 @@ class LogListNotifier extends StateNotifier<LogListState> {
       data: {'ids': ids},
     );
     await load(refresh: true);
+  }
+
+  Future<int> deleteAllMatching() async {
+    // 后端日志列表单页最多 100 条，这里按当前筛选条件分页取出所有日志 ID 后批量删除。
+    const pageSize = 100;
+    final ids = <int>[];
+    var page = 1;
+    var total = 0;
+
+    do {
+      final response = await DioClient.instance.dio.get(
+        ApiEndpoints.logs,
+        queryParameters: _currentQueryParams(page: page, pageSize: pageSize),
+      );
+      final paginated = extractPaginated(response.data);
+      total = paginated.total;
+      final pageIds = paginated.items
+          .map((entry) => TaskLog.fromJson(entry).id)
+          .where((id) => id > 0)
+          .toList();
+      if (pageIds.isEmpty) {
+        break;
+      }
+      ids.addAll(pageIds);
+      page++;
+    } while (ids.length < total);
+
+    if (ids.isEmpty) {
+      await load(refresh: true);
+      return 0;
+    }
+
+    await DioClient.instance.dio.post(
+      ApiEndpoints.logsBatchDelete,
+      data: {'ids': ids},
+    );
+    await load(refresh: true);
+    return ids.length;
   }
 
   Future<void> clean({int? days}) async {
@@ -301,12 +346,47 @@ class _LogListPageState extends ConsumerState<LogListPage> {
       ),
     );
     if (days == null) return;
+
+    if (days == 0) {
+      if (!mounted) {
+        return;
+      }
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('清理全部日志'),
+          content: const Text('确定要清理当前筛选条件下的全部日志吗？此操作不可恢复。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.red500),
+              child: const Text('清理'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
     try {
-      await ref
-          .read(logListProvider.notifier)
-          .clean(days: days == 0 ? null : days);
+      if (days == 0) {
+        // 后端 clean 接口会自动套用默认保留天数，不能表达“全部清空”。
+        // 所以这里改为读取当前筛选条件下全部日志 ID，再走批量删除接口。
+        final count = await ref
+            .read(logListProvider.notifier)
+            .deleteAllMatching();
+        _exitSelectionMode();
+        _showMessage(count == 0 ? '暂无可清理日志' : '已清理 $count 条日志');
+        return;
+      }
+
+      await ref.read(logListProvider.notifier).clean(days: days);
       _exitSelectionMode();
-      _showMessage(days == 0 ? '已清理全部日志' : '已清理 $days 天前的日志');
+      _showMessage('已清理 $days 天前的日志');
     } catch (e) {
       _showMessage(_extractError(e, '清理失败'));
     }

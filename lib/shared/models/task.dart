@@ -22,6 +22,7 @@ class Task {
   final bool notifyOnSuccess;
   final int? notificationChannelId;
   final int? dependsOn;
+  final int sortOrder;
   final bool isPinned;
   final String? taskBefore;
   final String? taskAfter;
@@ -54,6 +55,7 @@ class Task {
     this.notifyOnSuccess = false,
     this.notificationChannelId,
     this.dependsOn,
+    this.sortOrder = 0,
     this.isPinned = false,
     this.taskBefore,
     this.taskAfter,
@@ -149,6 +151,7 @@ class Task {
       notifyOnSuccess: json['notify_on_success'] == true,
       notificationChannelId: _intOrNull(json['notification_channel_id']),
       dependsOn: _intOrNull(json['depends_on']),
+      sortOrder: _int(json['sort_order']),
       isPinned: json['is_pinned'] == true,
       taskBefore: json['task_before']?.toString(),
       taskAfter: json['task_after']?.toString(),
@@ -176,6 +179,7 @@ class Task {
     'notify_on_success': notifyOnSuccess,
     'notification_channel_id': notificationChannelId,
     'depends_on': dependsOn,
+    'sort_order': sortOrder,
     'task_before': taskBefore,
     'task_after': taskAfter,
     'allow_multiple_instances': allowMultipleInstances,

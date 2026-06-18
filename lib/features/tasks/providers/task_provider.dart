@@ -59,9 +59,7 @@ class TaskNotifier extends StateNotifier<TaskListState> {
     state = state.copyWith(loading: true, error: null);
     try {
       final dio = DioClient.instance.dio;
-      final queryParams = <String, dynamic>{
-        'all': 1,
-      };
+      final queryParams = <String, dynamic>{'all': 1};
       if (state.keyword.isNotEmpty) {
         queryParams['keyword'] = state.keyword;
       }
@@ -80,11 +78,7 @@ class TaskNotifier extends StateNotifier<TaskListState> {
       final items = paginated.items.map((e) => Task.fromJson(e)).toList();
       final total = paginated.total;
 
-      state = state.copyWith(
-        tasks: items,
-        total: total,
-        loading: false,
-      );
+      state = state.copyWith(tasks: items, total: total, loading: false);
     } catch (e) {
       state = state.copyWith(loading: false, error: '加载失败');
     }
@@ -132,6 +126,64 @@ class TaskNotifier extends StateNotifier<TaskListState> {
   Future<void> deleteTask(int id) async {
     await DioClient.instance.dio.delete(ApiEndpoints.taskById(id));
     await load(refresh: true);
+  }
+
+  Future<void> batchRun(List<int> ids) async {
+    await DioClient.instance.dio.post(
+      ApiEndpoints.tasksBatchRun,
+      // 面板批量任务接口使用 task_ids 字段，不能复用环境变量的 ids 字段。
+      data: {'task_ids': ids},
+    );
+    await load(refresh: true);
+  }
+
+  Future<void> batchEnable(List<int> ids) async {
+    await DioClient.instance.dio.put(
+      ApiEndpoints.tasksBatchEnable,
+      // 面板批量任务接口使用 task_ids 字段，保证与 Web 端请求保持一致。
+      data: {'task_ids': ids},
+    );
+    await load(refresh: true);
+  }
+
+  Future<void> batchDisable(List<int> ids) async {
+    await DioClient.instance.dio.put(
+      ApiEndpoints.tasksBatchDisable,
+      // 面板批量任务接口使用 task_ids 字段，避免后端提示“请求参数错误”。
+      data: {'task_ids': ids},
+    );
+    await load(refresh: true);
+  }
+
+  Future<void> batchDelete(List<int> ids) async {
+    await DioClient.instance.dio.delete(
+      ApiEndpoints.tasksBatchDelete,
+      // DELETE 请求的 body 也需要传 task_ids，和 Web 端保持一致。
+      data: {'task_ids': ids},
+    );
+    await load(refresh: true);
+  }
+
+  Future<void> saveTaskOrder(List<Task> tasks) async {
+    // 后端当前没有独立的任务排序接口，但任务更新接口允许写入 sort_order。
+    // 这里按当前拖拽后的列表顺序写入 10、20、30...，后续插入任务时仍有间隔。
+    for (var index = 0; index < tasks.length; index++) {
+      await DioClient.instance.dio.put(
+        ApiEndpoints.taskById(tasks[index].id),
+        data: {'sort_order': (index + 1) * 10},
+      );
+    }
+    await load(refresh: true);
+  }
+
+  void reorderLocalTasks(int oldIndex, int newIndex) {
+    final items = List<Task>.from(state.tasks);
+    if (newIndex > oldIndex) {
+      newIndex--;
+    }
+    final item = items.removeAt(oldIndex);
+    items.insert(newIndex, item);
+    state = state.copyWith(tasks: items);
   }
 
   Future<TaskLog?> fetchLatestLog(int id) async {
