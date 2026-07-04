@@ -424,6 +424,95 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
     return confirmed == true;
   }
 
+  Future<bool> _confirmDelete(EnvVar env) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('删除环境变量'),
+        content: Text('确定删除「${env.name}」吗？删除后无法恢复。'),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(dialogCtx).pop(false),
+                    child: const Text('取消'),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 44,
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(dialogCtx).pop(true),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.red500,
+                    ),
+                    child: const Text('删除'),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    return confirmed == true;
+  }
+
+  Future<void> _setEnvEnabled(EnvVar env, bool enabled) async {
+    if (env.enabled == enabled) {
+      return;
+    }
+
+    try {
+      await ref.read(envListProvider.notifier).toggle(env.id, enabled);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(enabled ? '已启用 ${env.name}' : '已禁用 ${env.name}'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(extractErrorMessage(error, '修改环境变量状态失败'))),
+      );
+    }
+  }
+
+  Future<void> _deleteEnv(EnvVar env) async {
+    final confirmed = await _confirmDelete(env);
+    if (!confirmed || !mounted) {
+      return;
+    }
+
+    try {
+      await ref.read(envListProvider.notifier).delete(env.id);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已删除 ${env.name}')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(extractErrorMessage(error, '删除环境变量失败'))),
+      );
+    }
+  }
+
   Future<void> _performBatchAction(_EnvBatchAction action) async {
     final ids = _selectedIds.toList()..sort();
     if (ids.isEmpty) {
@@ -623,88 +712,6 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
     await ref.read(envListProvider.notifier).load();
   }
 
-  Future<void> _openValueFullScreenEditor(
-    TextEditingController controller, {
-    required String title,
-  }) async {
-    final editorC = TextEditingController(text: controller.text);
-    final result = await Navigator.of(context).push<String>(
-      MaterialPageRoute(
-        fullscreenDialog: true,
-        builder: (pageContext) {
-          final isLight = Theme.of(pageContext).brightness == Brightness.light;
-          return Scaffold(
-            appBar: AppBar(
-              title: Text(title),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(pageContext).pop(editorC.text),
-                  child: const Text('完成'),
-                ),
-              ],
-            ),
-            body: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      '适合编辑账号较多、Token 很长或多行变量值。',
-                      style: TextStyle(fontSize: 12, color: AppColors.slate500),
-                    ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: editorC,
-                        autofocus: true,
-                        expands: true,
-                        maxLines: null,
-                        minLines: null,
-                        keyboardType: TextInputType.multiline,
-                        textAlignVertical: TextAlignVertical.top,
-                        decoration: InputDecoration(
-                          hintText: '在这里编辑完整变量值',
-                          alignLabelWithHint: true,
-                          filled: true,
-                          fillColor: isLight
-                              ? Colors.white
-                              : AppColors.slate900,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            bottomNavigationBar: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: FilledButton.icon(
-                  // 全屏编辑页只负责回填文本，真正保存仍由原来的“保存/创建”按钮执行。
-                  onPressed: () => Navigator.of(pageContext).pop(editorC.text),
-                  icon: const Icon(Icons.check, size: 18),
-                  label: const Text('完成并回填'),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-    editorC.dispose();
-    if (result == null) {
-      return;
-    }
-    controller.text = result;
-    controller.selection = TextSelection.fromPosition(
-      TextPosition(offset: controller.text.length),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(envListProvider);
@@ -755,18 +762,12 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                                       );
                                 }
                                 if (mounted) {
-                                  final messenger = ScaffoldMessenger.of(
-                                    context,
-                                  );
                                   messenger.showSnackBar(
                                     const SnackBar(content: Text('排序已保存')),
                                   );
                                 }
                               } catch (error) {
                                 if (mounted) {
-                                  final messenger = ScaffoldMessenger.of(
-                                    context,
-                                  );
                                   messenger.showSnackBar(
                                     SnackBar(
                                       content: Text(
@@ -1265,24 +1266,9 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
                                 const SnackBar(content: Text('已复制值')),
                               );
                             },
-                            onToggle: () async {
-                              await ref
-                                  .read(envListProvider.notifier)
-                                  .toggle(env.id, !env.enabled);
-                              if (!mounted) {
-                                return;
-                              }
-                              messenger.showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    env.enabled
-                                        ? '已禁用 ${env.name}'
-                                        : '已启用 ${env.name}',
-                                  ),
-                                ),
-                              );
-                            },
-                            onEdit: () => _showDetailSheet(env),
+                            onEnable: () => _setEnvEnabled(env, true),
+                            onDisable: () => _setEnvEnabled(env, false),
+                            onDelete: () => _deleteEnv(env),
                           );
                         },
                       ),
@@ -1301,203 +1287,217 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
     final remarksC = TextEditingController(text: env.remarks);
     final groupC = TextEditingController(text: env.groups.join(', '));
     final groups = [...ref.read(envListProvider).groups];
+    var valueEditorOpen = false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       useRootNavigator: true,
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        final navigator = Navigator.of(ctx);
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            0,
-            20,
-            MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color:
-                          (env.enabled ? AppColors.primary : AppColors.slate400)
-                              .withAlpha(18),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      env.enabled ? '当前已启用' : '当前已禁用',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: env.enabled
-                            ? AppColors.primary
-                            : AppColors.slate500,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final theme = Theme.of(ctx);
+          final navigator = Navigator.of(ctx);
+          if (valueEditorOpen) {
+            return _EnvValueSheetEditor(
+              title: '编辑变量值',
+              controller: valueC,
+              onDone: () => setSheetState(() => valueEditorOpen = false),
+            );
+          }
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              0,
+              20,
+              MediaQuery.of(ctx).viewInsets.bottom + 20,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
                       ),
-                    ),
-                  ),
-                  const Spacer(),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      await ref
-                          .read(envListProvider.notifier)
-                          .toggle(env.id, !env.enabled);
-                      if (!mounted) {
-                        return;
-                      }
-                      navigator.pop();
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            env.enabled ? '已禁用 ${env.name}' : '已启用 ${env.name}',
-                          ),
+                      decoration: BoxDecoration(
+                        color:
+                            (env.enabled
+                                    ? AppColors.primary
+                                    : AppColors.slate400)
+                                .withAlpha(18),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        env.enabled ? '当前已启用' : '当前已禁用',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: env.enabled
+                              ? AppColors.primary
+                              : AppColors.slate500,
                         ),
-                      );
-                    },
-                    icon: Icon(
-                      env.enabled
-                          ? Icons.pause_circle_outline
-                          : Icons.play_arrow,
-                      size: 16,
-                    ),
-                    label: Text(env.enabled ? '禁用' : '启用'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: env.enabled
-                          ? AppColors.slate600
-                          : AppColors.primary,
-                      side: BorderSide(
-                        color: env.enabled
-                            ? AppColors.slate300
-                            : AppColors.primary,
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                env.name,
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameC,
-                decoration: const InputDecoration(labelText: '变量名'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: valueC,
-                decoration: InputDecoration(
-                  labelText: '值',
-                  suffixIcon: IconButton(
-                    // 变量值较长时进入全屏编辑，避免在底部弹窗的小输入框里反复横向/纵向滚动。
-                    icon: const Icon(Icons.open_in_full, size: 18),
-                    tooltip: '全屏编辑变量值',
-                    onPressed: () =>
-                        _openValueFullScreenEditor(valueC, title: '编辑变量值'),
-                  ),
-                ),
-                maxLines: 4,
-                minLines: 2,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: remarksC,
-                decoration: const InputDecoration(labelText: '备注'),
-              ),
-              const SizedBox(height: 12),
-              _buildGroupAutocomplete(controller: groupC, options: groups),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => Navigator.of(ctx).pop(),
-                      icon: const Icon(Icons.close, size: 16),
-                      label: const Text('关闭'),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(0, 44),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: valueC.text));
-                        ScaffoldMessenger.of(
-                          ctx,
-                        ).showSnackBar(const SnackBar(content: Text('已复制值')));
-                      },
-                      icon: const Icon(Icons.copy, size: 16),
-                      label: const Text('复制'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.blue500,
-                        side: const BorderSide(color: AppColors.blue500),
-                        minimumSize: const Size(0, 44),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
+                    const Spacer(),
+                    OutlinedButton.icon(
                       onPressed: () async {
-                        final rootMessenger = ScaffoldMessenger.of(context);
-                        try {
-                          await ref
-                              .read(envListProvider.notifier)
-                              .update(
-                                env.id,
-                                nameC.text.trim(),
-                                valueC.text,
-                                remarks: remarksC.text.trim(),
-                                groups: _normalizeGroups([groupC.text]),
-                              );
-                          if (!mounted) {
-                            return;
-                          }
-                          final navigator = Navigator.of(ctx);
-                          navigator.pop();
-                          rootMessenger.showSnackBar(
-                            const SnackBar(content: Text('已保存')),
-                          );
-                        } catch (error) {
-                          if (!mounted) {
-                            return;
-                          }
-                          rootMessenger.showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                extractErrorMessage(error, '保存环境变量失败'),
-                              ),
-                            ),
-                          );
+                        await ref
+                            .read(envListProvider.notifier)
+                            .toggle(env.id, !env.enabled);
+                        if (!mounted) {
+                          return;
                         }
+                        navigator.pop();
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              env.enabled
+                                  ? '已禁用 ${env.name}'
+                                  : '已启用 ${env.name}',
+                            ),
+                          ),
+                        );
                       },
-                      icon: const Icon(Icons.save, size: 16),
-                      label: const Text('保存'),
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 44),
+                      icon: Icon(
+                        env.enabled
+                            ? Icons.pause_circle_outline
+                            : Icons.play_arrow,
+                        size: 16,
+                      ),
+                      label: Text(env.enabled ? '禁用' : '启用'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: env.enabled
+                            ? AppColors.slate600
+                            : AppColors.primary,
+                        side: BorderSide(
+                          color: env.enabled
+                              ? AppColors.slate300
+                              : AppColors.primary,
+                        ),
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  env.name,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameC,
+                  decoration: const InputDecoration(labelText: '变量名'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: valueC,
+                  decoration: InputDecoration(
+                    labelText: '值',
+                    suffixIcon: IconButton(
+                      // 变量值较长时切到弹窗内的大输入区，不再新开页面，避免回填丢失。
+                      icon: const Icon(Icons.open_in_full, size: 18),
+                      tooltip: '放大编辑变量值',
+                      onPressed: () =>
+                          setSheetState(() => valueEditorOpen = true),
+                    ),
+                  ),
+                  maxLines: 4,
+                  minLines: 2,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: remarksC,
+                  decoration: const InputDecoration(labelText: '备注'),
+                ),
+                const SizedBox(height: 12),
+                _buildGroupAutocomplete(controller: groupC, options: groups),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        icon: const Icon(Icons.close, size: 16),
+                        label: const Text('关闭'),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 44),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: valueC.text));
+                          ScaffoldMessenger.of(
+                            ctx,
+                          ).showSnackBar(const SnackBar(content: Text('已复制值')));
+                        },
+                        icon: const Icon(Icons.copy, size: 16),
+                        label: const Text('复制'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.blue500,
+                          side: const BorderSide(color: AppColors.blue500),
+                          minimumSize: const Size(0, 44),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () async {
+                          final rootMessenger = ScaffoldMessenger.of(context);
+                          final navigator = Navigator.of(ctx);
+                          try {
+                            await ref
+                                .read(envListProvider.notifier)
+                                .update(
+                                  env.id,
+                                  nameC.text.trim(),
+                                  valueC.text,
+                                  remarks: remarksC.text.trim(),
+                                  groups: _normalizeGroups([groupC.text]),
+                                );
+                            if (!mounted) {
+                              return;
+                            }
+                            navigator.pop();
+                            rootMessenger.showSnackBar(
+                              const SnackBar(content: Text('已保存')),
+                            );
+                          } catch (error) {
+                            if (!mounted) {
+                              return;
+                            }
+                            rootMessenger.showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  extractErrorMessage(error, '保存环境变量失败'),
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.save, size: 16),
+                        label: const Text('保存'),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 44),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     ).then((_) {
       nameC.dispose();
       valueC.dispose();
@@ -1512,121 +1512,266 @@ class _EnvListPageState extends ConsumerState<EnvListPage> {
     final remarksC = TextEditingController();
     final groupC = TextEditingController();
     final groups = [...ref.read(envListProvider).groups];
+    var valueEditorOpen = false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       useRootNavigator: true,
-      builder: (ctx) {
-        final navigator = Navigator.of(ctx);
-        final rootMessenger = ScaffoldMessenger.of(context);
-        return Padding(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            0,
-            20,
-            MediaQuery.of(ctx).viewInsets.bottom + 20,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                '新建环境变量',
-                style: Theme.of(
-                  ctx,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameC,
-                decoration: const InputDecoration(
-                  labelText: '变量名',
-                  hintText: '如 MY_TOKEN',
-                ),
-                textInputAction: TextInputAction.next,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: valueC,
-                decoration: InputDecoration(
-                  labelText: '值',
-                  suffixIcon: IconButton(
-                    // 新建变量时也提供全屏编辑，账号很多时可以先大屏整理再创建。
-                    icon: const Icon(Icons.open_in_full, size: 18),
-                    tooltip: '全屏编辑变量值',
-                    onPressed: () =>
-                        _openValueFullScreenEditor(valueC, title: '新建变量值'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final navigator = Navigator.of(ctx);
+          final rootMessenger = ScaffoldMessenger.of(context);
+          if (valueEditorOpen) {
+            return _EnvValueSheetEditor(
+              title: '新建变量值',
+              controller: valueC,
+              onDone: () => setSheetState(() => valueEditorOpen = false),
+            );
+          }
+          return Padding(
+            padding: EdgeInsets.fromLTRB(
+              20,
+              0,
+              20,
+              MediaQuery.of(ctx).viewInsets.bottom + 20,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  '新建环境变量',
+                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                maxLines: 3,
-                minLines: 1,
-                textInputAction: TextInputAction.next,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: remarksC,
-                      decoration: const InputDecoration(labelText: '备注'),
-                      textInputAction: TextInputAction.next,
+                const SizedBox(height: 16),
+                TextField(
+                  controller: nameC,
+                  decoration: const InputDecoration(
+                    labelText: '变量名',
+                    hintText: '如 MY_TOKEN',
+                  ),
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: valueC,
+                  decoration: InputDecoration(
+                    labelText: '值',
+                    suffixIcon: IconButton(
+                      // 新建变量时也用同一个控制器放大编辑，完成后原表单立即保留输入。
+                      icon: const Icon(Icons.open_in_full, size: 18),
+                      tooltip: '放大编辑变量值',
+                      onPressed: () =>
+                          setSheetState(() => valueEditorOpen = true),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildGroupAutocomplete(
-                      controller: groupC,
-                      options: groups,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              FilledButton(
-                onPressed: () async {
-                  if (nameC.text.trim().isEmpty) return;
-                  try {
-                    await ref
-                        .read(envListProvider.notifier)
-                        .create(
-                          nameC.text.trim(),
-                          valueC.text,
-                          remarks: remarksC.text.trim(),
-                          groups: _normalizeGroups([groupC.text]),
-                        );
-                    if (!mounted) {
-                      return;
-                    }
-                    navigator.pop();
-                    rootMessenger.showSnackBar(
-                      const SnackBar(content: Text('环境变量已创建')),
-                    );
-                  } catch (error) {
-                    if (!mounted) {
-                      return;
-                    }
-                    rootMessenger.showSnackBar(
-                      SnackBar(
-                        content: Text(extractErrorMessage(error, '创建环境变量失败')),
+                  maxLines: 3,
+                  minLines: 1,
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: remarksC,
+                        decoration: const InputDecoration(labelText: '备注'),
+                        textInputAction: TextInputAction.next,
                       ),
-                    );
-                  }
-                },
-                style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-                child: const Text('创建'),
-              ),
-            ],
-          ),
-        );
-      },
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildGroupAutocomplete(
+                        controller: groupC,
+                        options: groups,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                FilledButton(
+                  onPressed: () async {
+                    if (nameC.text.trim().isEmpty) return;
+                    try {
+                      await ref
+                          .read(envListProvider.notifier)
+                          .create(
+                            nameC.text.trim(),
+                            valueC.text,
+                            remarks: remarksC.text.trim(),
+                            groups: _normalizeGroups([groupC.text]),
+                          );
+                      if (!mounted) {
+                        return;
+                      }
+                      navigator.pop();
+                      rootMessenger.showSnackBar(
+                        const SnackBar(content: Text('环境变量已创建')),
+                      );
+                    } catch (error) {
+                      if (!mounted) {
+                        return;
+                      }
+                      rootMessenger.showSnackBar(
+                        SnackBar(
+                          content: Text(extractErrorMessage(error, '创建环境变量失败')),
+                        ),
+                      );
+                    }
+                  },
+                  style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
+                  child: const Text('创建'),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     ).then((_) {
       nameC.dispose();
       valueC.dispose();
       remarksC.dispose();
       groupC.dispose();
     });
+  }
+}
+
+class _EnvValueSheetEditor extends StatelessWidget {
+  final String title;
+  final TextEditingController controller;
+  final VoidCallback onDone;
+
+  const _EnvValueSheetEditor({
+    required this.title,
+    required this.controller,
+    required this.onDone,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    final editorHeight = (screenHeight - keyboardHeight - 72)
+        .clamp(420.0, screenHeight * 0.88)
+        .toDouble();
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) {
+          return;
+        }
+        // 系统返回键只退出大输入区，不直接关闭整个新建/编辑弹窗。
+        onDone();
+      },
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(20, 0, 20, keyboardHeight + 16),
+          child: SizedBox(
+            height: editorHeight,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withAlpha(isLight ? 20 : 34),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.open_in_full,
+                        size: 18,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '回到表单',
+                      onPressed: onDone,
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '这里直接编辑原表单里的值，点完成后会回到新建/编辑窗口，不会丢输入。',
+                  style: TextStyle(fontSize: 12, color: AppColors.slate500),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    autofocus: true,
+                    expands: true,
+                    maxLines: null,
+                    minLines: null,
+                    keyboardType: TextInputType.multiline,
+                    textAlignVertical: TextAlignVertical.top,
+                    decoration: InputDecoration(
+                      hintText: '在这里编辑完整变量值',
+                      alignLabelWithHint: true,
+                      filled: true,
+                      fillColor: isLight ? Colors.white : AppColors.slate900,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          controller.clear();
+                        },
+                        icon: const Icon(Icons.cleaning_services, size: 16),
+                        label: const Text('清空'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.slate500,
+                          minimumSize: const Size(0, 44),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: FilledButton.icon(
+                        // 不再新开路由，直接收起大输入区，因此原表单控制器会立即保留当前文本。
+                        onPressed: onDone,
+                        icon: const Icon(Icons.check, size: 18),
+                        label: const Text('完成，回到表单'),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(0, 44),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1731,7 +1876,7 @@ class _BatchActionButton extends StatelessWidget {
   }
 }
 
-class _EnvCard extends StatelessWidget {
+class _EnvCard extends StatefulWidget {
   final EnvVar env;
   final bool isLight;
   final bool selectionMode;
@@ -1740,8 +1885,9 @@ class _EnvCard extends StatelessWidget {
   final VoidCallback onLongPress;
   final VoidCallback onSelectedChanged;
   final VoidCallback onCopy;
-  final VoidCallback onToggle;
-  final VoidCallback onEdit;
+  final VoidCallback onEnable;
+  final VoidCallback onDisable;
+  final VoidCallback onDelete;
 
   const _EnvCard({
     required this.env,
@@ -1752,120 +1898,298 @@ class _EnvCard extends StatelessWidget {
     required this.onLongPress,
     required this.onSelectedChanged,
     required this.onCopy,
-    required this.onToggle,
-    required this.onEdit,
+    required this.onEnable,
+    required this.onDisable,
+    required this.onDelete,
+  });
+
+  @override
+  State<_EnvCard> createState() => _EnvCardState();
+}
+
+class _EnvCardState extends State<_EnvCard> {
+  static const double _actionWidth = 64;
+  static const double _actionGap = 6;
+  static const double _actionsWidth = _actionWidth * 3 + _actionGap * 2 + 8;
+
+  double _dragOffset = 0;
+  bool _dragging = false;
+
+  @override
+  void didUpdateWidget(covariant _EnvCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectionMode || oldWidget.env.id != widget.env.id) {
+      _dragOffset = 0;
+      _dragging = false;
+    }
+  }
+
+  void _closeActions() {
+    if (_dragOffset == 0) {
+      return;
+    }
+    setState(() => _dragOffset = 0);
+  }
+
+  void _runSwipeAction(VoidCallback action) {
+    _closeActions();
+    action();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Row(
+                children: [
+                  _SwipeActionButton(
+                    label: '启用',
+                    icon: Icons.play_arrow_rounded,
+                    color: AppColors.primary,
+                    enabled: !widget.env.enabled,
+                    onTap: () => _runSwipeAction(widget.onEnable),
+                  ),
+                  const SizedBox(width: _actionGap),
+                  _SwipeActionButton(
+                    label: '删除',
+                    icon: Icons.delete_outline,
+                    color: AppColors.red500,
+                    enabled: true,
+                    onTap: () => _runSwipeAction(widget.onDelete),
+                  ),
+                  const SizedBox(width: _actionGap),
+                  _SwipeActionButton(
+                    label: '禁用',
+                    icon: Icons.pause_rounded,
+                    color: AppColors.slate500,
+                    enabled: widget.env.enabled,
+                    onTap: () => _runSwipeAction(widget.onDisable),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              if (_dragOffset > 0) {
+                _closeActions();
+                return;
+              }
+              widget.onTap();
+            },
+            onLongPress: widget.onLongPress,
+            onHorizontalDragStart: widget.selectionMode
+                ? null
+                : (_) => setState(() => _dragging = true),
+            onHorizontalDragUpdate: widget.selectionMode
+                ? null
+                : (details) {
+                    // 右滑只露出操作按钮，不直接触发删除，避免误触。
+                    final nextOffset = (_dragOffset + details.delta.dx)
+                        .clamp(0.0, _actionsWidth)
+                        .toDouble();
+                    if (nextOffset == _dragOffset) {
+                      return;
+                    }
+                    setState(() => _dragOffset = nextOffset);
+                  },
+            onHorizontalDragCancel: widget.selectionMode
+                ? null
+                : () => setState(() => _dragging = false),
+            onHorizontalDragEnd: widget.selectionMode
+                ? null
+                : (_) {
+                    final nextOffset = _dragOffset > _actionsWidth * 0.42
+                        ? _actionsWidth
+                        : 0.0;
+                    setState(() {
+                      _dragging = false;
+                      _dragOffset = nextOffset;
+                    });
+                    if (nextOffset == _actionsWidth) {
+                      HapticFeedback.selectionClick();
+                    }
+                  },
+            child: AnimatedContainer(
+              duration: _dragging
+                  ? Duration.zero
+                  : const Duration(milliseconds: 160),
+              curve: Curves.easeOutCubic,
+              transform: Matrix4.translationValues(_dragOffset, 0, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: widget.isLight ? Colors.white : AppColors.slate900,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: widget.selected
+                      ? AppColors.primary
+                      : (widget.isLight
+                            ? AppColors.slate200
+                            : AppColors.slate800),
+                  width: widget.selected ? 1.4 : 1,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (widget.selectionMode) ...[
+                        SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: Checkbox(
+                            value: widget.selected,
+                            onChanged: (_) => widget.onSelectedChanged(),
+                            activeColor: AppColors.primary,
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: widget.env.enabled
+                              ? AppColors.primary
+                              : AppColors.slate300,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          widget.env.name,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: widget.isLight
+                                ? AppColors.blue600
+                                : AppColors.blue500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (!widget.selectionMode) ...[
+                        _MiniBtn(
+                          icon: Icons.copy_outlined,
+                          onTap: widget.onCopy,
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.swipe_right_alt_rounded,
+                          size: 18,
+                          color: AppColors.slate400,
+                        ),
+                      ],
+                    ],
+                  ),
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: widget.selectionMode ? 32 : 14,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.env.value.replaceAll('\n', ' '),
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontFamily: 'monospace',
+                            color: widget.isLight
+                                ? AppColors.slate500
+                                : AppColors.slate400,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (widget.env.remarks.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.env.remarks,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: widget.isLight
+                                  ? AppColors.slate400
+                                  : AppColors.slate500,
+                              fontStyle: FontStyle.italic,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SwipeActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _SwipeActionButton({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.enabled,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      onLongPress: onLongPress,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: isLight ? Colors.white : AppColors.slate900,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: selected
-                ? AppColors.primary
-                : (isLight ? AppColors.slate200 : AppColors.slate800),
-            width: selected ? 1.4 : 1,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                if (selectionMode) ...[
-                  SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: Checkbox(
-                      value: selected,
-                      onChanged: (_) => onSelectedChanged(),
-                      activeColor: AppColors.primary,
-                      visualDensity: VisualDensity.compact,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                ],
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: env.enabled ? AppColors.primary : AppColors.slate300,
-                    shape: BoxShape.circle,
-                  ),
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final backgroundColor = enabled
+        ? (isLight ? color.withAlpha(24) : color.withAlpha(34))
+        : (isLight ? AppColors.slate50 : AppColors.slate800);
+    final foregroundColor = enabled ? color : AppColors.slate400;
+
+    return SizedBox(
+      width: _EnvCardState._actionWidth,
+      child: Material(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(10),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 18, color: foregroundColor),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: foregroundColor,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    env.name,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: isLight ? AppColors.blue600 : AppColors.blue500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (!selectionMode) ...[
-                  _MiniBtn(icon: Icons.copy_outlined, onTap: onCopy),
-                  const SizedBox(width: 4),
-                  GestureDetector(
-                    onTap: onToggle,
-                    child: Icon(
-                      env.enabled ? Icons.toggle_on : Icons.toggle_off_outlined,
-                      size: 32,
-                      color: env.enabled
-                          ? AppColors.primary
-                          : AppColors.slate400,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            Padding(
-              padding: EdgeInsets.only(left: selectionMode ? 32 : 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 4),
-                  Text(
-                    env.value.replaceAll('\n', ' '),
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontFamily: 'monospace',
-                      color: isLight ? AppColors.slate500 : AppColors.slate400,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (env.remarks.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      env.remarks,
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: isLight
-                            ? AppColors.slate400
-                            : AppColors.slate500,
-                        fontStyle: FontStyle.italic,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

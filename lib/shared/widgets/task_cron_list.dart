@@ -14,8 +14,10 @@ class TaskCronList extends StatelessWidget {
     this.numbered = true,
   });
 
-  List<String> get _normalized =>
-      expressions.map((item) => item.trim()).where((item) => item.isNotEmpty).toList();
+  List<String> get _normalized => expressions
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList();
 
   @override
   Widget build(BuildContext context) {
@@ -24,70 +26,111 @@ class TaskCronList extends StatelessWidget {
     final items = _normalized;
 
     if (items.isEmpty) {
-      return Text(
-        '-',
-        style: TextStyle(
-          fontSize: compact ? 11 : 12,
-          color: theme.colorScheme.onSurfaceVariant,
+      return Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 8 : 10,
+          vertical: compact ? 6 : 9,
+        ),
+        decoration: BoxDecoration(
+          color: isLight ? AppColors.slate50 : AppColors.slate800,
+          borderRadius: BorderRadius.circular(compact ? 8 : 10),
+          border: Border.all(
+            color: isLight ? AppColors.slate200 : AppColors.slate700,
+          ),
+        ),
+        child: Text(
+          '暂无定时规则',
+          style: TextStyle(
+            fontSize: compact ? 11 : 12,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
       );
     }
 
     final isMulti = items.length > 1;
-    final codeBg = isLight ? AppColors.slate50 : AppColors.slate800;
-    final codeBorder = isLight ? AppColors.slate200 : AppColors.slate700;
+    final cardBg = isLight ? AppColors.slate50 : AppColors.slate800;
+    final cardBorder = isLight ? AppColors.slate200 : AppColors.slate700;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (var i = 0; i < items.length; i++) ...[
-          if (i > 0) SizedBox(height: compact ? 4 : 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (numbered && isMulti)
+          if (i > 0) SizedBox(height: compact ? 6 : 8),
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(
+              horizontal: compact ? 9 : 11,
+              vertical: compact ? 7 : 10,
+            ),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(compact ? 10 : 12),
+              border: Border.all(color: cardBorder),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
                 Container(
-                  width: compact ? 18 : 20,
-                  height: compact ? 18 : 20,
-                  margin: EdgeInsets.only(top: compact ? 2 : 1, right: 8),
+                  width: compact ? 26 : 30,
+                  height: compact ? 26 : 30,
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withAlpha(isLight ? 24 : 38),
-                    shape: BoxShape.circle,
+                    color: AppColors.primary.withAlpha(isLight ? 22 : 36),
+                    borderRadius: BorderRadius.circular(compact ? 8 : 10),
                   ),
                   alignment: Alignment.center,
-                  child: Text(
-                    '${i + 1}',
-                    style: TextStyle(
-                      fontSize: compact ? 10 : 11,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
-                    ),
+                  child: numbered && isMulti
+                      ? Text(
+                          '${i + 1}',
+                          style: TextStyle(
+                            fontSize: compact ? 10 : 11,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primary,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.schedule_rounded,
+                          size: 16,
+                          color: AppColors.primary,
+                        ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (!compact) ...[
+                        Text(
+                          isMulti ? 'Cron 规则 ${i + 1}' : 'Cron 规则',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: isLight
+                                ? AppColors.slate500
+                                : AppColors.slate400,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                      // Cron 本身保留等宽字体，外层改成信息卡，不再像输入框。
+                      SelectableText(
+                        items[i],
+                        maxLines: compact ? 1 : 2,
+                        style: TextStyle(
+                          fontSize: compact ? 11 : 12,
+                          height: compact ? 1.25 : 1.45,
+                          fontFamily: 'monospace',
+                          color: isLight
+                              ? AppColors.slate800
+                              : AppColors.slate100,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: compact ? 8 : 10,
-                    vertical: compact ? 5 : 7,
-                  ),
-                  decoration: BoxDecoration(
-                    color: codeBg,
-                    borderRadius: BorderRadius.circular(compact ? 8 : 10),
-                    border: Border.all(color: codeBorder),
-                  ),
-                  child: SelectableText(
-                    items[i],
-                    style: TextStyle(
-                      fontSize: compact ? 11 : 12,
-                      height: compact ? 1.35 : 1.45,
-                      fontFamily: 'monospace',
-                      color: isLight ? AppColors.slate700 : AppColors.slate200,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ],
