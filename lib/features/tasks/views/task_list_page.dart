@@ -1720,250 +1720,264 @@ class _TaskCardState extends State<_TaskCard> {
     final hasFailure = task.lastRunStatus == 1;
     final primaryColor = task.isRunning ? AppColors.red500 : AppColors.primary;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned.fill(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Row(
-                children: [
-                  _TaskSwipeActionButton(
-                    label: task.isDisabled ? '启用' : '禁用',
-                    icon: task.isDisabled
-                        ? Icons.play_circle_outline
-                        : Icons.pause_circle_outline,
-                    color: task.isDisabled
-                        ? AppColors.primary
-                        : AppColors.slate500,
-                    onTap: () => _runSwipeAction(widget.onToggleEnabled),
-                  ),
-                  const SizedBox(width: _actionGap),
-                  _TaskSwipeActionButton(
-                    label: task.isPinned ? '取消' : '置顶',
-                    icon: task.isPinned
-                        ? Icons.push_pin_outlined
-                        : Icons.push_pin,
-                    color: AppColors.amber500,
-                    onTap: () => _runSwipeAction(widget.onTogglePinned),
-                  ),
-                  const SizedBox(width: _actionGap),
-                  _TaskSwipeActionButton(
-                    label: '复制',
-                    icon: Icons.copy_outlined,
-                    color: AppColors.blue500,
-                    onTap: () => _runSwipeAction(widget.onCopy),
-                  ),
-                  const SizedBox(width: _actionGap),
-                  _TaskSwipeActionButton(
-                    label: '编辑',
-                    icon: Icons.edit_outlined,
-                    color: AppColors.slate500,
-                    onTap: () => _runSwipeAction(widget.onEdit),
-                  ),
-                  const SizedBox(width: _actionGap),
-                  _TaskSwipeActionButton(
-                    label: '删除',
-                    icon: Icons.delete_outline,
-                    color: AppColors.red500,
-                    onTap: () => _runSwipeAction(widget.onDelete),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          GestureDetector(
-            onTap: () {
-              if (_dragOffset > 0) {
-                _closeActions();
-                return;
-              }
-              widget.onTap();
-            },
-            onLongPress: widget.onLongPress,
-            onHorizontalDragStart: widget.selectionMode
-                ? null
-                : (_) => setState(() => _dragging = true),
-            onHorizontalDragUpdate: widget.selectionMode
-                ? null
-                : (details) {
-                    // 右滑只露出次要操作，主操作保留在卡片底部，避免按钮挤在一起。
-                    final nextOffset = (_dragOffset + details.delta.dx)
-                        .clamp(0.0, _actionsWidth)
-                        .toDouble();
-                    if (nextOffset == _dragOffset) {
-                      return;
-                    }
-                    setState(() => _dragOffset = nextOffset);
-                  },
-            onHorizontalDragCancel: widget.selectionMode
-                ? null
-                : () => setState(() => _dragging = false),
-            onHorizontalDragEnd: widget.selectionMode
-                ? null
-                : (_) {
-                    final nextOffset = _dragOffset > _actionsWidth * 0.42
-                        ? _actionsWidth
-                        : 0.0;
-                    setState(() {
-                      _dragging = false;
-                      _dragOffset = nextOffset;
-                    });
-                    if (nextOffset == _actionsWidth) {
-                      HapticFeedback.selectionClick();
-                    }
-                  },
-            child: AnimatedContainer(
-              duration: _dragging
-                  ? Duration.zero
-                  : const Duration(milliseconds: 160),
-              curve: Curves.easeOutCubic,
-              transform: Matrix4.translationValues(_dragOffset, 0, 0),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: widget.isLight ? Colors.white : AppColors.slate900,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: widget.selected
-                      ? AppColors.primary
-                      : (hasFailure
-                            ? AppColors.red500.withAlpha(60)
-                            : borderColor),
-                  width: widget.selected ? 1.4 : 1,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      if (widget.selectionMode) ...[
-                        SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: Checkbox(
-                            value: widget.selected,
-                            onChanged: (_) => widget.onSelectedChanged(),
-                            activeColor: AppColors.primary,
-                            visualDensity: VisualDensity.compact,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: dotColor,
-                          shape: BoxShape.circle,
-                          boxShadow: task.isRunning || hasFailure
-                              ? [
-                                  BoxShadow(
-                                    color: dotColor.withAlpha(140),
-                                    blurRadius: 8,
-                                  ),
-                                ]
-                              : null,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          task.name,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (task.isPinned)
-                        const Padding(
-                          padding: EdgeInsets.only(right: 6),
-                          child: Icon(
-                            Icons.push_pin,
-                            size: 14,
-                            color: AppColors.amber500,
-                          ),
-                        ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _statusBg(),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          _statusLabel(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: _statusFg(),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  _TaskScheduleSummary(
-                    taskType: task.taskType,
-                    taskTypeLabel: _taskTypeLabel(),
-                    expressions: _scheduleExpressions(),
-                    isLight: widget.isLight,
-                  ),
-                  if (labels.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    _TaskSubscriptionSummary(
-                      labels: labels,
-                      isLight: widget.isLight,
+    return PopScope(
+      canPop: _dragOffset == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop || _dragOffset == 0) {
+          return;
+        }
+        // 侧滑按钮展开时，系统返回先收起按钮，避免用户回滑时误退出 APP。
+        _closeActions();
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _TaskSwipeActionButton(
+                      label: task.isDisabled ? '启用' : '禁用',
+                      icon: task.isDisabled
+                          ? Icons.play_circle_outline
+                          : Icons.pause_circle_outline,
+                      color: task.isDisabled
+                          ? AppColors.primary
+                          : AppColors.slate500,
+                      onTap: () => _runSwipeAction(widget.onToggleEnabled),
+                    ),
+                    const SizedBox(width: _actionGap),
+                    _TaskSwipeActionButton(
+                      label: task.isPinned ? '取消' : '置顶',
+                      icon: task.isPinned
+                          ? Icons.push_pin_outlined
+                          : Icons.push_pin,
+                      color: AppColors.amber500,
+                      onTap: () => _runSwipeAction(widget.onTogglePinned),
+                    ),
+                    const SizedBox(width: _actionGap),
+                    _TaskSwipeActionButton(
+                      label: '复制',
+                      icon: Icons.copy_outlined,
+                      color: AppColors.blue500,
+                      onTap: () => _runSwipeAction(widget.onCopy),
+                    ),
+                    const SizedBox(width: _actionGap),
+                    _TaskSwipeActionButton(
+                      label: '编辑',
+                      icon: Icons.edit_outlined,
+                      color: AppColors.slate500,
+                      onTap: () => _runSwipeAction(widget.onEdit),
+                    ),
+                    const SizedBox(width: _actionGap),
+                    _TaskSwipeActionButton(
+                      label: '删除',
+                      icon: Icons.delete_outline,
+                      color: AppColors.red500,
+                      onTap: () => _runSwipeAction(widget.onDelete),
                     ),
                   ],
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _bottomText(),
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: hasFailure
-                                ? AppColors.red500
-                                : (widget.isLight
-                                      ? AppColors.slate400
-                                      : AppColors.slate500),
-                          ),
-                        ),
-                      ),
-                      if (!widget.selectionMode) ...[
-                        _TaskPrimaryActionButton(
-                          label: task.isRunning ? '停止' : '运行',
-                          icon: task.isRunning
-                              ? Icons.stop_rounded
-                              : Icons.play_arrow_rounded,
-                          color: primaryColor,
-                          onTap: task.isRunning ? widget.onStop : widget.onRun,
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(
-                          Icons.swipe_right_alt_rounded,
-                          size: 18,
-                          color: AppColors.slate400,
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
-        ],
+            GestureDetector(
+              onTap: () {
+                if (_dragOffset != 0) {
+                  _closeActions();
+                  return;
+                }
+                widget.onTap();
+              },
+              onLongPress: widget.onLongPress,
+              onHorizontalDragStart: widget.selectionMode
+                  ? null
+                  : (_) => setState(() => _dragging = true),
+              onHorizontalDragUpdate: widget.selectionMode
+                  ? null
+                  : (details) {
+                      // 左滑露出右侧次要操作；关闭时也限制在卡片内处理，避免和系统返回手势抢动作。
+                      final nextOffset = (_dragOffset + details.delta.dx)
+                          .clamp(-_actionsWidth, 0.0)
+                          .toDouble();
+                      if (nextOffset == _dragOffset) {
+                        return;
+                      }
+                      setState(() => _dragOffset = nextOffset);
+                    },
+              onHorizontalDragCancel: widget.selectionMode
+                  ? null
+                  : () => setState(() => _dragging = false),
+              onHorizontalDragEnd: widget.selectionMode
+                  ? null
+                  : (_) {
+                      final nextOffset =
+                          _dragOffset.abs() > _actionsWidth * 0.42
+                          ? -_actionsWidth
+                          : 0.0;
+                      setState(() {
+                        _dragging = false;
+                        _dragOffset = nextOffset;
+                      });
+                      if (nextOffset == -_actionsWidth) {
+                        HapticFeedback.selectionClick();
+                      }
+                    },
+              child: AnimatedContainer(
+                duration: _dragging
+                    ? Duration.zero
+                    : const Duration(milliseconds: 160),
+                curve: Curves.easeOutCubic,
+                transform: Matrix4.translationValues(_dragOffset, 0, 0),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: widget.isLight ? Colors.white : AppColors.slate900,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: widget.selected
+                        ? AppColors.primary
+                        : (hasFailure
+                              ? AppColors.red500.withAlpha(60)
+                              : borderColor),
+                    width: widget.selected ? 1.4 : 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        if (widget.selectionMode) ...[
+                          SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: Checkbox(
+                              value: widget.selected,
+                              onChanged: (_) => widget.onSelectedChanged(),
+                              activeColor: AppColors.primary,
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: dotColor,
+                            shape: BoxShape.circle,
+                            boxShadow: task.isRunning || hasFailure
+                                ? [
+                                    BoxShadow(
+                                      color: dotColor.withAlpha(140),
+                                      blurRadius: 8,
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            task.name,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (task.isPinned)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 6),
+                            child: Icon(
+                              Icons.push_pin,
+                              size: 14,
+                              color: AppColors.amber500,
+                            ),
+                          ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _statusBg(),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            _statusLabel(),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: _statusFg(),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _TaskScheduleSummary(
+                      taskType: task.taskType,
+                      taskTypeLabel: _taskTypeLabel(),
+                      expressions: _scheduleExpressions(),
+                      isLight: widget.isLight,
+                    ),
+                    if (labels.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      _TaskSubscriptionSummary(
+                        labels: labels,
+                        isLight: widget.isLight,
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _bottomText(),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: hasFailure
+                                  ? AppColors.red500
+                                  : (widget.isLight
+                                        ? AppColors.slate400
+                                        : AppColors.slate500),
+                            ),
+                          ),
+                        ),
+                        if (!widget.selectionMode) ...[
+                          _TaskPrimaryActionButton(
+                            label: task.isRunning ? '停止' : '运行',
+                            icon: task.isRunning
+                                ? Icons.stop_rounded
+                                : Icons.play_arrow_rounded,
+                            color: primaryColor,
+                            onTap: task.isRunning
+                                ? widget.onStop
+                                : widget.onRun,
+                          ),
+                          const SizedBox(width: 8),
+                          const Icon(
+                            Icons.swipe_left_alt_rounded,
+                            size: 18,
+                            color: AppColors.slate400,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
