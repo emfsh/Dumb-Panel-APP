@@ -289,4 +289,3 @@ class _LogStreamPageState extends State<LogStreamPage> {
     );
   }
 }
-
